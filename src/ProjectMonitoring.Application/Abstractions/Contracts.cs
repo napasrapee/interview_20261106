@@ -15,6 +15,7 @@ public interface IDepartmentRepository
 public interface IUserRepository
 {
     Task<User?> FindAsync(long id, CancellationToken cancellationToken);
+    Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken);
     Task<PagedResult<User>> ListAsync(UserListQuery query, CancellationToken cancellationToken);
     void Add(User user);
     void Remove(User user);
@@ -45,8 +46,20 @@ public interface IUnitOfWork
 public interface IPasswordHasher
 {
     string Hash(string password);
-    bool Verify(string password, string passwordHash);
+
+    /// <summary>
+    /// Takes the same time with or without a hash, so response timing does not reveal
+    /// whether an account exists. Always returns false when <paramref name="passwordHash"/> is null.
+    /// </summary>
+    bool Verify(string password, string? passwordHash);
 }
+
+public interface ITokenIssuer
+{
+    AccessToken Issue(User user);
+}
+
+public sealed record AccessToken(string Value, int ExpiresInSeconds);
 
 public interface ICurrentUser
 {

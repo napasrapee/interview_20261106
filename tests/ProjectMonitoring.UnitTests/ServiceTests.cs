@@ -29,7 +29,18 @@ public class ServiceTests
     private sealed class FakeHasher : IPasswordHasher
     {
         public string Hash(string password) => "hashed:" + password;
-        public bool Verify(string password, string passwordHash) => passwordHash == "hashed:" + password;
+        public int Verifications { get; private set; }
+
+        public bool Verify(string password, string? passwordHash)
+        {
+            Verifications++;
+            return passwordHash == "hashed:" + password;
+        }
+    }
+
+    private sealed class FakeTokens : ITokenIssuer
+    {
+        public AccessToken Issue(User user) => new("token", 3600);
     }
 
     private sealed class FakeUsers(User? user = null) : IUserRepository
@@ -37,6 +48,7 @@ public class ServiceTests
         public User? Added { get; private set; }
         public bool Removed { get; private set; }
         public Task<User?> FindAsync(long id, CancellationToken cancellationToken) => Task.FromResult(user);
+        public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken) => Task.FromResult(user);
         public Task<PagedResult<User>> ListAsync(UserListQuery query, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public void Add(User newUser) => Added = newUser;
@@ -166,6 +178,59 @@ public class ServiceTests
 
         Assert.Equal("original", user.PasswordHash);
         Assert.Equal("B", user.FullName);
+    }
+
+    private static AuthService NewAuthService(FakeUsers users, FakeHasher hasher) =>
+        new(users, hasher, new FakeTokens(), new FakeCurrentUser(null, null),
+            NewUserService(users, new FakeUnitOfWork()), new LoginRequestValidator());
+
+    private static readonly LoginRequest ValidLogin = new("a@example.com", "password1");
+
+    [Fact]
+    public async Task Correct_password_returns_bearer_token()
+    {
+        var user = ExistingUser();
+        user.SetPasswordHash("hashed:password1");
+
+        var result = await NewAuthService(new FakeUsers(user), new FakeHasher()).LoginAsync(ValidLogin, None);
+
+        Assert.Equal("token", result.AccessToken);
+        Assert.Equal("Bearer", result.TokenType);
+        Assert.Equal(3600, result.ExpiresIn);
+    }
+
+    [Fact]
+    public async Task Unknown_email_fails_after_running_password_check()
+    {
+        var hasher = new FakeHasher();
+        await Assert.ThrowsAsync<InvalidCredentialsException>(
+            () => NewAuthService(new FakeUsers(), hasher).LoginAsync(ValidLogin, None));
+        Assert.Equal(1, hasher.Verifications);
+    }
+
+    [Fact]
+    public async Task Wrong_password_fails()
+    {
+        var user = ExistingUser();
+        user.SetPasswordHash("hashed:other");
+        await Assert.ThrowsAsync<InvalidCredentialsException>(
+            () => NewAuthService(new FakeUsers(user), new FakeHasher()).LoginAsync(ValidLogin, None));
+    }
+
+    [Fact]
+    public async Task Inactive_account_fails_with_correct_password()
+    {
+        var user = new User(1, "A", "a@example.com", UserRole.Member, isActive: false);
+        user.SetPasswordHash("hashed:password1");
+        await Assert.ThrowsAsync<InvalidCredentialsException>(
+            () => NewAuthService(new FakeUsers(user), new FakeHasher()).LoginAsync(ValidLogin, None));
+    }
+
+    [Fact]
+    public async Task Account_without_password_fails()
+    {
+        await Assert.ThrowsAsync<InvalidCredentialsException>(
+            () => NewAuthService(new FakeUsers(ExistingUser()), new FakeHasher()).LoginAsync(ValidLogin, None));
     }
 
     [Fact]

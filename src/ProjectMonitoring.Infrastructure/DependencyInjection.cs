@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using ProjectMonitoring.Application.Abstractions;
 using ProjectMonitoring.Infrastructure.Health;
 using ProjectMonitoring.Infrastructure.Persistence;
+using ProjectMonitoring.Infrastructure.Security;
 
 namespace ProjectMonitoring.Infrastructure;
 
@@ -24,6 +26,10 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IWorkTaskRepository, WorkTaskRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+        services.AddSingleton(JwtOptions.Load(configuration));
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 }

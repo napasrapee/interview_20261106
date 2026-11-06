@@ -19,6 +19,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     public ServiceProvider Services { get; private set; } = null!;
 
+    public string ConnectionString => _container.GetConnectionString();
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -26,6 +28,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Default"] = _container.GetConnectionString(),
+                ["Jwt:Secret"] = new string('x', 32),
+                ["Jwt:Issuer"] = "test",
+                ["Jwt:Audience"] = "test",
             })
             .Build();
         Services = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();

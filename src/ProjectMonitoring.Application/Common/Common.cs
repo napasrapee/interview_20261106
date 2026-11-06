@@ -19,6 +19,10 @@ public sealed class ConflictException(string message, Exception? innerException 
 
 public sealed class ForbiddenException(string message) : Exception(message);
 
+public sealed class InvalidCredentialsException() : Exception("Email or password is incorrect.");
+
+public sealed class UnauthorizedException(string message) : Exception(message);
+
 public sealed class RequestValidationException(IReadOnlyDictionary<string, string[]> errors)
     : Exception("One or more fields are invalid.")
 {

@@ -41,6 +41,10 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
     public async Task<User?> FindAsync(long id, CancellationToken cancellationToken) =>
         await db.Users.FindAsync([id], cancellationToken);
 
+    // ToLower translates to lower(email), which uses ux_users_email_lower.
+    public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+        db.Users.FirstOrDefaultAsync(user => user.Email.ToLower() == email.ToLower(), cancellationToken);
+
     public Task<PagedResult<User>> ListAsync(UserListQuery query, CancellationToken cancellationToken)
     {
         var users = db.Users.AsQueryable();
