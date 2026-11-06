@@ -1,0 +1,244 @@
+Containerized Business Analytics System
+สรุปสถาปัตยกรรม โครงสร้างโค้ด และ Pattern ที่ใช้
+======================================================================
+
+วิธีติดตั้งอยู่ใน INSTALL.txt, API อยู่ใน README.md
+และรายละเอียดเชิงลึกอยู่ใน docs/SA.docx
+
+
+1. ภาพรวม
+----------------------------------------------------------------------
+
+Backend API สำหรับจัดการและวิเคราะห์ข้อมูลโครงการ ออกแบบเป็น Clean Architecture
+4 ชั้น รันด้วย Docker Compose
+
+  ส่วน              เทคโนโลยี
+  ----------------  ------------------------------------------------
+  ภาษาและ Runtime    C#, .NET 10, ASP.NET Core Controllers
+  ฐานข้อมูล          PostgreSQL 18
+  เข้าถึงข้อมูล        EF Core + Npgsql สำหรับ CRUD, SQL ตรงสำหรับรายงาน
+  ตรวจข้อมูล          FluentValidation
+  ความปลอดภัย       JWT + Role, BCrypt, Rate Limiting
+  Container         Docker, Docker Compose
+  ทดสอบ             xUnit, WebApplicationFactory, Testcontainers, Newman
+  ดูแลระบบ           Bash, logrotate, cron
+
+
+2. Clean Architecture
+----------------------------------------------------------------------
+
+Dependency ชี้เข้าหา Domain เสมอ:
+
+    Api ----------> Application ----------> Domain
+     |                  ^
+     |                  |
+     +----------> Infrastructure
+
+  ชั้น              หน้าที่                                อ้างถึง
+  ----------------  ------------------------------------  ----------------
+  Domain            Entity, enum, กฎธุรกิจ                  ไม่มี
+  Application       Use case, DTO, Validator, Interface   Domain
+  Infrastructure    EF Core, SQL, BCrypt, JWT             Application
+  Api               Controller, Middleware, สิทธิ์           Application,
+                                                          Infrastructure
+
+Api อ้าง Infrastructure เฉพาะการลงทะเบียน DI และ JwtOptions สำหรับตรวจ token
+
+ข้อดีของโครงสร้างนี้คือกฎธุรกิจไม่ขึ้นกับฐานข้อมูลหรือ HTTP จึงทดสอบด้วย unit test
+ได้โดยไม่ต้องมีฐานข้อมูล
+
+
+3. โครงสร้างโฟลเดอร์
+----------------------------------------------------------------------
+
+  src/ProjectMonitoring.Domain/
+      Department.cs, User.cs, Project.cs, WorkTask.cs, SystemLog.cs
+      UserRole.cs, ProjectStatus.cs, WorkTaskStatus.cs ...
+
+  src/ProjectMonitoring.Application/
+      Abstractions/   Interface ที่ Infrastructure ต้องทำตาม
+      Common/         PagedResult, Exception, การตรวจข้อมูลที่ใช้ร่วมกัน
+      Features/       แยกตามเรื่อง: Auth, Departments, Logs, Projects,
+                      Reports, Tasks, Users
+
+  src/ProjectMonitoring.Infrastructure/
+      Health/         ตรวจการเชื่อมต่อฐานข้อมูล
+      Persistence/    AppDbContext, Repository, UnitOfWork, ReportQueries
+      Security/       BCrypt, JWT
+
+  src/ProjectMonitoring.Api/
+      Controllers/    รับ request และส่งต่อให้ Service
+      Errors/         รูปแบบ error กลาง
+      Json/           การอ่าน JSON
+      Middleware/     จัดการ error และบันทึก log
+      Security/       JWT, สิทธิ์, จำกัดจำนวนครั้ง login
+      Startup/        การตั้งค่าตอนเริ่มระบบ
+
+  tests/              Unit test และ integration test
+  db/init/            SQL สร้าง schema และข้อมูลตัวอย่าง
+  scripts/            สคริปต์ Bash
+  config/             logrotate.conf
+  postman/            Postman collection และ environment
+  docs/               เอกสาร BA, SA และรูป diagram
+
+
+4. Design Pattern ที่ใช้
+----------------------------------------------------------------------
+
+4.1 Repository + Unit of Work
+    ซ่อน EF Core จาก Application และรวมการบันทึกข้อมูลไว้จุดเดียว
+    src/ProjectMonitoring.Application/Abstractions/IUserRepository.cs
+    src/ProjectMonitoring.Infrastructure/Persistence/UserRepository.cs
+    src/ProjectMonitoring.Infrastructure/Persistence/UnitOfWork.cs
+
+4.2 Service Layer
+    Controller บาง รับ request แล้วเรียก Service ซึ่งเก็บ logic ของแต่ละ use case
+    src/ProjectMonitoring.Api/Controllers/UsersController.cs
+    src/ProjectMonitoring.Application/Features/Users/UserService.cs
+
+4.3 Rich Domain Model
+    กฎอยู่ใน Entity เช่น ตั้งและล้าง completedAt ตามสถานะงาน
+    และข้อมูลแก้จากภายนอกได้ผ่าน method เท่านั้น
+    src/ProjectMonitoring.Domain/WorkTask.cs
+
+4.4 Data Transfer Object
+    แยกข้อมูลของ API จาก Entity ด้วย record จึงไม่ส่ง password hash ออกไป
+    src/ProjectMonitoring.Application/Features/Users/UserDto.cs
+
+4.5 Validator
+    ตรวจ request แยกจาก logic ด้วย FluentValidation
+    src/ProjectMonitoring.Application/Features/Users/UserRequestValidator.cs
+
+4.6 แยกเส้นทางอ่านรายงาน
+    CRUD ใช้ EF Core ส่วนรายงานใช้ SQL ตรงผ่าน interface แยก เพื่อควบคุม JOIN,
+    CTE และ window function ได้เต็มที่ ไม่ใช่ CQRS เต็มรูปแบบ
+    src/ProjectMonitoring.Application/Abstractions/IReportQueries.cs
+    src/ProjectMonitoring.Infrastructure/Persistence/ReportQueries.cs
+
+4.7 Middleware Pipeline
+    จัดการ error และบันทึก log จุดเดียว Controller จึงไม่ต้องมี try/catch
+    src/ProjectMonitoring.Api/Middleware/ErrorHandlingMiddleware.cs
+    src/ProjectMonitoring.Api/Middleware/RequestLoggingMiddleware.cs
+
+4.8 Policy-based Authorization
+    สิทธิ์ตาม role และ endpoint ใหม่ต้อง login โดยปริยาย ถ้าลืมกำหนดสิทธิ์จึงไม่เปิดสาธารณะ
+    src/ProjectMonitoring.Api/Security/SecurityExtensions.cs
+    src/ProjectMonitoring.Api/Security/Policies.cs
+
+4.9 Dependency Injection
+    แต่ละชั้นลงทะเบียนของตัวเอง ด้วย AddApplication และ AddInfrastructure
+    src/ProjectMonitoring.Application/DependencyInjection.cs
+    src/ProjectMonitoring.Infrastructure/DependencyInjection.cs
+
+4.10 Feature Folder
+    โค้ดของเรื่องเดียวกันอยู่ด้วยกัน เช่น request, DTO, validator และ service
+    src/ProjectMonitoring.Application/Features/Users/
+
+4.11 Database-first
+    SQL เป็นตัวกำหนด schema ส่วน EF Core แค่ map ตาราง ไม่ใช้ migration
+    เพราะโจทย์ให้สร้าง schema ผ่าน /docker-entrypoint-initdb.d/
+    db/init/01_schema.sql
+    src/ProjectMonitoring.Infrastructure/Persistence/AppDbContext.cs
+
+4.12 Init Container
+    Service ที่รันครั้งเดียวเพื่อสุ่มความลับ docker compose up จึงใช้ได้ทันที
+    โดยไม่มีความลับใน repository
+    scripts/init-secrets.sh
+    docker-compose.yml
+
+4.13 Multi-stage Build
+    แยกขั้นตอน build ออกจาก image ที่ใช้งานจริง จึงไม่มี SDK ใน image
+    Dockerfile
+
+
+5. เส้นทางของ 1 Request
+----------------------------------------------------------------------
+
+ตัวอย่าง POST /api/v1/projects
+
+  1. RequestLoggingMiddleware   เริ่มจับเวลา
+  2. ErrorHandlingMiddleware    รอจับ exception
+  3. Rate Limiter, JWT, Policy  ตรวจ token และ role
+  4. ProjectsController         รับ request และเรียก Service
+  5. ProjectService             ตรวจด้วย Validator และสร้าง Entity
+  6. Project                    ตรวจกฎธุรกิจ เช่น ช่วงวันที่
+  7. ProjectRepository          เพิ่มข้อมูลเข้า DbContext
+  8. UnitOfWork                 บันทึกลง PostgreSQL
+  9. ProjectDto                 ส่งกลับเป็น 201 พร้อม Location
+
+ถ้าเกิดปัญหา exception จะถูกแปลงเป็น application/problem+json:
+
+  Exception                                        ผลลัพธ์
+  -----------------------------------------------  ---------------------------
+  RequestValidationException, DomainRuleException  400 validation_error
+  InvalidCredentialsException                      401 invalid_credentials
+  UnauthorizedException                            401 unauthorized
+  ForbiddenException                               403 forbidden
+  NotFoundException                                404 not_found
+  ConflictException                                409 conflict
+  DbException ชั่วคราว                                503 database_unavailable
+  อื่น ๆ                                              500 internal_error
+
+error ทุกกรณีมี traceId ซึ่งตรงกับ system_logs และไม่มี stack trace
+
+
+6. ฐานข้อมูล
+----------------------------------------------------------------------
+
+  ตาราง: departments, users, projects, tasks, system_logs
+
+  ความสามารถของ PostgreSQL ที่ใช้
+    - Identity column และ Foreign key แบบ RESTRICT, CASCADE, SET NULL
+    - CHECK ข้ามคอลัมน์ เช่น completed_at ต้องสอดคล้องกับ status
+    - Unique index บน lower(email) และ partial index สำหรับงานที่ยังไม่เสร็จ
+    - Trigger ปรับ updated_at, JSONB ใน system_logs และ COMMENT ON
+    - รายงานใช้ CTE, LEFT JOIN, aggregate FILTER และ RANK()
+
+
+7. ความปลอดภัย
+----------------------------------------------------------------------
+
+  - ความลับสุ่มตอนเริ่มครั้งแรก เก็บเป็นไฟล์ใน volume ไม่อยู่ใน repository
+    และไม่โผล่ใน docker inspect
+  - รหัสผ่านเก็บเป็น BCrypt และ JWT ลงนามด้วย HS256 อายุ 60 นาที
+  - สิทธิ์ 3 ระดับ: admin, manager, member และ login จำกัด 10 ครั้งต่อนาทีต่อ IP
+  - system_logs ไม่เก็บ request body, query string, รหัสผ่าน หรือ token
+  - CSV ป้องกัน formula injection และ SQL ใช้พารามิเตอร์
+  - API รันแบบ non-root, read-only และไม่มี Linux capability
+  - Database อยู่ใน network แบบ internal และไม่เปิดพอร์ตออกนอก
+
+
+8. การทดสอบ
+----------------------------------------------------------------------
+
+  ระดับ          เครื่องมือ                         สิ่งที่ตรวจ
+  -------------  ------------------------------  --------------------------
+  Unit           xUnit และ fake ที่เขียนเอง          กฎธุรกิจ, validator, service
+  Integration    WebApplicationFactory และ       HTTP, สิทธิ์, SQL และ constraint
+                 PostgreSQL จริงผ่าน Testcontainers
+  API            Postman, Newman                 ทุก endpoint กับระบบจริง
+
+สคริปต์ Bash ตรวจด้วย ShellCheck และทดสอบกับ container จริงระหว่างพัฒนา
+โดยชุดทดสอบของสคริปต์ไม่ได้อยู่ใน repository
+
+
+9. สิ่งที่ตั้งใจไม่ใช้
+----------------------------------------------------------------------
+
+  ไม่ใช้               เหตุผล
+  -----------------  ---------------------------------------------------
+  MediatR, CQRS      ขนาดงานนี้เรียก Service ตรง ๆ อ่านง่ายกว่า
+  AutoMapper         เขียน mapping เองเห็นชัดว่าฟิลด์ไหนออกไป ลดโอกาสข้อมูลรั่ว
+  EF Migrations      โจทย์ให้สร้าง schema ผ่าน /docker-entrypoint-initdb.d/
+  Generic Repository แต่ละ Repository มีตัวกรองต่างกัน จึงเขียนแยกชัดเจนกว่า
+
+
+10. ข้อตกลงในโค้ด
+----------------------------------------------------------------------
+
+  - หนึ่ง type ต่อหนึ่งไฟล์ และใช้ file-scoped namespace
+  - Namespace ตรงกับโฟลเดอร์ ยกเว้น Domain ที่อยู่ใน namespace เดียว
+  - JSON เป็น camelCase และคอลัมน์ฐานข้อมูลเป็น snake_case
+  - ค่า enum ใน API และฐานข้อมูลเป็น snake_case เช่น on_hold
+  - Method ที่ใช้ I/O เป็น async และรับ CancellationToken
+  - Commit message รูปแบบ type(scope): summary

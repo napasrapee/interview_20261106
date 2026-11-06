@@ -65,7 +65,7 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 
 ## สถาปัตยกรรม
 
-Dependency ชี้เข้าหา Domain เสมอ: Api และ Infrastructure อ้าง Application และ Application อ้าง Domain
+Dependency ชี้เข้าหา Domain เสมอ: Api และ Infrastructure อ้าง Application และ Application อ้าง Domain ส่วนสรุป pattern, โครงสร้างโค้ด และเส้นทางของ request อยู่ใน [ARCHITECTURE.txt](ARCHITECTURE.txt)
 
 ![Clean Architecture Layers](docs/images/SA-01.png)
 
