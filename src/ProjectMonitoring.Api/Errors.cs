@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ProjectMonitoring.Application.Common;
+using ProjectMonitoring.Application.Features;
 using ProjectMonitoring.Domain;
 
 namespace ProjectMonitoring.Api;
@@ -64,7 +65,8 @@ public static class Problems
     }
 }
 
-public sealed class ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+public sealed class ErrorHandlingMiddleware(
+    RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger, ISystemLogWriter logWriter)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -88,6 +90,8 @@ public sealed class ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorH
                 logger.LogWarning("Request failed: {Code}", problem.Extensions["code"]);
             }
 
+            await logWriter.WriteAsync(ToLog(context, exception, problem));
+
             if (context.Response.HasStarted)
             {
                 throw;
@@ -96,6 +100,36 @@ public sealed class ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorH
             context.Response.Clear();
             await Problems.WriteAsync(context, problem);
         }
+    }
+
+    private static SystemLog ToLog(HttpContext context, Exception exception, ProblemDetails problem)
+    {
+        var isServerError = problem.Status >= StatusCodes.Status500InternalServerError;
+        var eventType = exception switch
+        {
+            InvalidCredentialsException => "login_failed",
+            _ when isServerError => "exception",
+            _ => "request_rejected",
+        };
+
+        // Rejections are expected, so only unexpected failures keep the exception details.
+        // Login failures store no email, as people sometimes type a password into that field.
+        var details = isServerError
+            ? JsonSerializer.Serialize(new { exceptionType = exception.GetType().FullName, message = exception.Message })
+            : null;
+
+        return new SystemLog(
+            isServerError ? SystemLogLevel.Error : SystemLogLevel.Warning,
+            eventType,
+            (string)problem.Extensions["code"]!)
+        {
+            HttpMethod = context.Request.Method,
+            Path = RequestLoggingMiddleware.Truncate(context.Request.Path.Value, 500),
+            StatusCode = problem.Status,
+            TraceId = RequestLogContext.TraceId(context),
+            UserId = RequestLogContext.UserId(context),
+            Details = details,
+        };
     }
 
     private static ProblemDetails Map(HttpContext context, Exception exception) => exception switch

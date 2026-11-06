@@ -26,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IWorkTaskRepository, WorkTaskRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ProjectMonitoring.Application.Features.ISystemLogRepository, SystemLogRepository>();
+        services.AddSingleton<ProjectMonitoring.Application.Features.ISystemLogWriter, SystemLogWriter>();
         services.AddSingleton<ProjectMonitoring.Application.Features.IReportQueries, ReportQueries>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();

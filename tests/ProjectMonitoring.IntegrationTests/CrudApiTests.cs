@@ -52,7 +52,7 @@ public sealed class ApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _database.InitializeAsync();
-        _factory = ApiFactory.Create(_database.ConnectionString);
+        _factory = ApiFactory.Create(_database.ConnectionString, extraControllers: typeof(PolicyProbeController).Assembly);
         Anonymous = _factory.CreateClient();
         Admin = await LogInAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
         AdminId = (await (await Admin.GetAsync("/api/v1/auth/me")).Content.ReadFromJsonAsync<JsonElement>())
@@ -153,6 +153,11 @@ public class CrudApiTests(ApiFixture api) : IClassFixture<ApiFixture>
         { "PUT", "/api/v1/tasks/1", "manager" },
         { "PATCH", "/api/v1/tasks/1/status", "member" },
         { "DELETE", "/api/v1/tasks/999999", "manager" },
+        { "GET", "/api/v1/reports/department-progress", "manager" },
+        { "GET", "/api/v1/reports/project-summary", "manager" },
+        { "GET", "/api/v1/reports/user-workload", "manager" },
+        { "GET", "/api/v1/reports/department-progress/export?format=csv", "manager" },
+        { "GET", "/api/v1/logs", "admin" },
     };
 
     [Theory]

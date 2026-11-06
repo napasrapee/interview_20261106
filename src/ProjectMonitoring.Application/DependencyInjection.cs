@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<ProjectService>();
         services.AddScoped<TaskService>();
         services.AddScoped<ReportService>();
+        services.AddScoped<LogService>();
         services.AddScoped<AuthService>();
         services.AddScoped<AdminBootstrapper>();
         return services;

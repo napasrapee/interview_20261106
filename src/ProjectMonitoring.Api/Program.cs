@@ -41,6 +41,8 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 
 var app = builder.Build();
 
+// Outermost, so the log records the final status set by the error handling below.
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseStatusCodePages(context => Problems.WriteEmptyStatusAsync(context.HttpContext));
 app.UseRouting();
