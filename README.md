@@ -1,20 +1,49 @@
 # Containerized Business Analytics System
 
-Backend API สำหรับจัดการและวิเคราะห์ข้อมูลโครงการ (Project Monitoring) พัฒนาด้วย .NET 10 แบบ Clean Architecture และ PostgreSQL
+Backend API สำหรับจัดการและวิเคราะห์ข้อมูลโครงการ (Project Monitoring) พัฒนาด้วย .NET 10 แบบ Clean Architecture และ PostgreSQL 18 รันด้วย Docker Compose พร้อมรายงานความคืบหน้าแยกตามแผนก และสคริปต์ดูแลระบบบน Linux
 
-> สถานะ: อยู่ระหว่างพัฒนา ขณะนี้มี Database และ `GET /health` ยังไม่มี endpoint ธุรกิจ
+## สิ่งที่ต้องมี
+
+- Docker และ Docker Compose v2
+- Bash, `curl` และ `openssl` (บน Windows ให้ใช้ WSL2 และเปิด WSL Integration ใน Docker Desktop)
 
 ## ติดตั้งและเริ่มระบบ
 
-ต้องมี Docker และ Docker Compose v2
-
 ```bash
+# 1. สร้าง .env ด้วยค่าสุ่ม
 cp .env.example .env
-# แก้ทุกค่า change-me ใน .env
-docker compose up --build
+sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
+sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 48)|" .env
+sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$(openssl rand -hex 16)|" .env
+
+# 2. เริ่มระบบ
+docker compose up --build -d --wait
+
+# 3. ตรวจสอบ
+./scripts/healthcheck.sh
 ```
 
-ตรวจสอบได้ที่ `http://localhost:8080/health`
+ครั้งแรกใช้เวลาประมาณ 2 ถึง 3 นาทีสำหรับการ build ระบบจะสร้างตารางและข้อมูลตัวอย่างอัตโนมัติจาก `db/init` และสร้างบัญชี Admin จาก `ADMIN_EMAIL` และ `ADMIN_PASSWORD` ใน `.env`
+
+ถ้าไม่เปลี่ยนค่า `change-me` หรือ `JWT_SECRET` สั้นกว่า 32 ไบต์ API จะไม่เริ่มทำงาน ดูสาเหตุได้ด้วย `docker compose logs api`
+
+### ลองใช้งาน
+
+```bash
+source .env
+TOKEN=$(curl -s -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+  http://localhost:8080/api/v1/auth/login | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/reports/department-progress
+```
+
+### หยุดระบบ
+
+```bash
+docker compose down      # หยุดระบบ ข้อมูลยังอยู่
+docker compose down -v   # ลบข้อมูลทั้งหมด รวมถึงไฟล์ backup
+```
 
 ## โครงสร้างโปรเจกต์
 
@@ -22,16 +51,138 @@ docker compose up --build
 |---|---|
 | `src/` | Domain, Application, Infrastructure, Api |
 | `tests/` | Unit test และ integration test |
-| `db/init/` | SQL สำหรับ schema และ seed |
-| `scripts/` | สคริปต์ดูแลระบบ |
-| `config/` | ไฟล์ตั้งค่า เช่น logrotate |
-| `docs/` | เอกสาร BA/SA รูปแบบ `.docx` |
+| `db/init/` | SQL สำหรับ schema, index และ seed |
+| `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh` |
+| `config/` | `logrotate.conf` |
+| `postman/` | Postman collection และ environment |
+| `docs/` | เอกสาร BA และ SA รูปแบบ `.docx` พร้อม ER diagram และ data dictionary |
 
-## Build
+## การตั้งค่า (.env)
 
-ต้องมี .NET SDK 10
+| ตัวแปร | ความลับ | คำอธิบาย |
+|---|---|---|
+| `POSTGRES_DB`, `POSTGRES_USER` | ไม่ | ชื่อฐานข้อมูลและผู้ใช้ |
+| `POSTGRES_PASSWORD` | ใช่ | รหัสผ่านฐานข้อมูล |
+| `API_PORT` | ไม่ | พอร์ตบนเครื่อง ค่าเริ่มต้น 8080 |
+| `JWT_SECRET` | ใช่ | ยาวอย่างน้อย 32 ไบต์ |
+| `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRES_MINUTES` | ไม่ | ค่าของ JWT |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | รหัสผ่านเป็นความลับ | Admin เริ่มต้น ใช้เมื่อยังไม่มีบัญชีนี้ |
+| `BACKUP_RETENTION_DAYS` | ไม่ | จำนวนวันที่เก็บ backup ค่าเริ่มต้น 7 |
+
+Database ไม่เปิดพอร์ตออกนอก Docker ถ้าต้องการดูข้อมูลให้ใช้:
 
 ```bash
-dotnet build
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+## API
+
+Base URL คือ `http://localhost:8080` และ endpoint ทั้งหมดขึ้นต้นด้วย `/api/v1` ยกเว้น `/health` ส่ง token ด้วย header `Authorization: Bearer <token>` ซึ่งมีอายุ 60 นาที
+
+| Endpoint | สิทธิ์ขั้นต่ำ | คำอธิบาย |
+|---|---|---|
+| `GET /health` | ไม่ต้องใช้ token | ตอบ `200` หรือ `503` เมื่อ Database ไม่พร้อม |
+| `POST /auth/login` | ไม่ต้องใช้ token | Login จำกัด 10 ครั้งต่อนาทีต่อ IP |
+| `GET /auth/me` | member | ข้อมูลผู้ใช้ปัจจุบัน |
+| `GET /departments`, `GET /departments/{id}` | member | ดูแผนก |
+| `POST`, `PUT /{id}`, `DELETE /{id}` ของ `/departments` | admin | จัดการแผนก |
+| `GET /users`, `GET /users/{id}` | manager | ดูผู้ใช้ กรองด้วย `departmentId`, `role` |
+| `POST`, `PUT /{id}`, `DELETE /{id}` ของ `/users` | admin | จัดการผู้ใช้ |
+| `GET /projects`, `GET /projects/{id}` | member | ดูโครงการ กรองด้วย `departmentId`, `status` |
+| `POST`, `PUT /{id}`, `DELETE /{id}` ของ `/projects` | manager | จัดการโครงการ การลบจะลบงานในโครงการด้วย |
+| `GET /tasks`, `GET /tasks/{id}` | member | ดูงาน กรองด้วย `projectId`, `assigneeUserId`, `status`, `overdue` |
+| `POST`, `PUT /{id}`, `DELETE /{id}` ของ `/tasks` | manager | จัดการงาน |
+| `PATCH /tasks/{id}/status` | member | member แก้ได้เฉพาะงานของตนเอง |
+| `GET /reports/department-progress` | manager | ความคืบหน้าตามแผนก |
+| `GET /reports/project-summary` | manager | สรุปรายโครงการ กรองด้วย `departmentId` |
+| `GET /reports/user-workload` | manager | ภาระงานรายผู้ใช้ กรองด้วย `departmentId` |
+| `GET /reports/{report}/export?format=json\|csv` | manager | ส่งออกรายงาน |
+| `GET /logs` | admin | System logs กรองด้วย `level`, `eventType`, `from`, `to` |
+
+รายการแบบแบ่งหน้ารับ `page` และ `pageSize` (สูงสุด 100) และตอบ `items`, `page`, `pageSize`, `totalItems`, `totalPages`
+
+**ความคืบหน้า** คือ `งานที่เสร็จ / งานทั้งหมด × 100` ยึดแผนกของโครงการ และไม่นับโครงการที่ยกเลิก
+
+### ตัวอย่าง Request
+
+```bash
+curl -X POST http://localhost:8080/api/v1/projects \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"departmentId":1,"code":"PRJ-100","name":"โครงการใหม่","status":"active",
+       "startDate":"2026-11-01","endDate":"2027-01-31","budget":250000}'
+```
+
+### Error
+
+Error ทุกกรณีเป็น `application/problem+json` ตาม RFC 9457:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "One or more fields are invalid.",
+  "code": "validation_error",
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "errors": { "email": ["'Email' is not a valid email address."] }
+}
+```
+
+| HTTP | `code` | เกิดเมื่อ |
+|---|---|---|
+| 400 | `validation_error`, `malformed_request` | ข้อมูลไม่ถูกต้อง หรือ JSON อ่านไม่ได้ |
+| 401 | `unauthorized`, `invalid_credentials` | Token ไม่ถูกต้อง หรือ login ไม่สำเร็จ |
+| 403 | `forbidden` | สิทธิ์ไม่พอ |
+| 404 | `not_found` | ไม่พบข้อมูล |
+| 405 | `method_not_allowed` | HTTP method ไม่รองรับ |
+| 409 | `conflict` | ค่าซ้ำ หรือข้อมูลยังถูกอ้างอิงอยู่ |
+| 415 | `unsupported_media_type` | Body ไม่ใช่ JSON |
+| 429 | `rate_limited` | Login ถี่เกินกำหนด |
+| 500 | `internal_error` | ข้อผิดพลาดที่ไม่ได้คาดไว้ |
+
+### Postman
+
+Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/` ใส่ `adminPassword` จาก `.env` ใน environment แล้วรันทั้ง collection ตามลำดับ collection นี้ลบข้อมูลที่สร้างเองหลังรันเสร็จ ส่วนการตรวจค่ารายงานคาดว่าข้อมูลตัวอย่างยังไม่ถูกแก้ไข
+
+## สคริปต์ดูแลระบบ
+
+| สคริปต์ | หน้าที่ | Exit code |
+|---|---|---|
+| `scripts/backup.sh` | `pg_dump` + `gzip` ลง volume `db_backups` ตรวจไฟล์ และลบไฟล์เกินกำหนด | `0` สำเร็จ, `1` ล้มเหลวหรือ `db` ไม่ทำงาน, `2` เรียก Docker ไม่ได้หรือค่าผิด |
+| `scripts/healthcheck.sh` | ตรวจสถานะ container และเรียก `/health` | `0` ปกติ, `1` มีบริการไม่พร้อม, `2` เรียก Docker ไม่ได้ |
+| `scripts/resource_usage.sh` | แสดง CPU, Memory, Network และ Disk จาก `docker stats` | `0` สำเร็จ, `1` มีบริการไม่ทำงาน, `2` เรียก Docker ไม่ได้ |
+
+### กู้คืนข้อมูล
+
+```bash
+docker compose exec db ls -l /backups
+docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" restored'
+docker compose exec -T db sh -c 'gunzip -c /backups/<ไฟล์> | psql -U "$POSTGRES_USER" -d restored'
+```
+
+คำสั่งนี้กู้คืนเข้าฐานข้อมูลใหม่ชื่อ `restored` เพื่อตรวจก่อนใช้งาน ส่วนการคัดลอกไฟล์ออกจาก volume ใช้ `docker compose cp db:/backups/<ไฟล์> .`
+
+### Log rotation
+
+- **Log ของ container:** จำกัดไฟล์ละ 10 MB สูงสุด 3 ไฟล์ ตั้งค่าใน `docker-compose.yml`
+- **Log ของสคริปต์ใน `logs/`:** หมุนรายวัน เก็บ 7 รอบ และบีบอัดด้วย `config/logrotate.conf`
+
+### ตั้งเวลาด้วย cron
+
+```cron
+0 2 * * * cd /path/to/project && mkdir -p logs && ./scripts/backup.sh >> logs/backup.log 2>&1
+0 3 * * * cd /path/to/project && /usr/sbin/logrotate --state logs/.logrotate.state config/logrotate.conf
+```
+
+## การทดสอบ
+
+ต้องมี .NET SDK 10 และเปิด Docker ไว้ เพราะ integration test จะเปิด PostgreSQL ชั่วคราวด้วย Testcontainers
+
+```bash
 dotnet test
 ```
+
+## เอกสารออกแบบ
+
+- `docs/BA.docx`: ขอบเขต, requirements, user stories, use cases และเกณฑ์ตรวจรับ
+- `docs/SA.docx`: สถาปัตยกรรม, ER diagram, data dictionary, API specification, diagram การทำงาน, deployment และแผนทดสอบ
