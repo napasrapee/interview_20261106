@@ -12,7 +12,12 @@ public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSi
 
 public record PageQuery(int Page = 1, int PageSize = 20);
 
-public sealed class NotFoundException(string resource, long id) : Exception($"{resource} {id} was not found.");
+public sealed class NotFoundException(string resource) : Exception($"{resource} was not found.")
+{
+    public NotFoundException(string resource, long id) : this($"{resource} {id}")
+    {
+    }
+}
 
 public sealed class ConflictException(string message, Exception? innerException = null)
     : Exception(message, innerException);
