@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
 using ProjectMonitoring.Api;
 using ProjectMonitoring.Application;
 using ProjectMonitoring.Application.Abstractions;
@@ -6,6 +7,17 @@ using ProjectMonitoring.Application.Features;
 using ProjectMonitoring.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Secrets created by scripts/init-secrets.sh: one file per setting, named like Jwt__Secret.
+// Reading files keeps them out of the container environment and `docker inspect`.
+if (builder.Configuration["SECRETS_DIR"] is { Length: > 0 } secretsDirectory)
+{
+    builder.Configuration.AddKeyPerFile(source =>
+    {
+        source.FileProvider = new PhysicalFileProvider(secretsDirectory);
+        source.IgnoreCondition = name => !name.Contains("__");
+    });
+}
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

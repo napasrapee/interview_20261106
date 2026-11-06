@@ -7,17 +7,38 @@ x-logging: &logging
     max-file: "3"
 
 services:
+  # One-shot: creates random secrets in a volume on the first start, then exits.
+  secrets-init:
+    image: postgres:18-alpine
+    entrypoint: ["sh", "/init-secrets.sh"]
+    network_mode: none
+    restart: "no"
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-project_monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - app_secrets:/run/app-secrets
+      - ./scripts/init-secrets.sh:/init-secrets.sh:ro
+
   db:
     image: postgres:18-alpine
     restart: unless-stopped
     logging: *logging
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-project_monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD_FILE: /run/app-secrets/postgres_password
     volumes:
       - db_data:/var/lib/postgresql
       - db_backups:/backups
+      - app_secrets:/run/app-secrets:ro
       - ./db/init:/docker-entrypoint-initdb.d:ro
     networks:
       - analytics_net
@@ -34,16 +55,18 @@ services:
     restart: unless-stopped
     logging: *logging
     depends_on:
+      secrets-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     environment:
-      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Jwt__Secret: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER in .env}
-      Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE in .env}
+      SECRETS_DIR: /run/app-secrets
+      Jwt__Issuer: ${JWT_ISSUER:-project-monitoring}
+      Jwt__Audience: ${JWT_AUDIENCE:-project-monitoring-clients}
       Jwt__ExpiresMinutes: ${JWT_EXPIRES_MINUTES:-60}
-      Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
-      Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      Admin__Email: ${ADMIN_EMAIL:-admin@example.com}
+    volumes:
+      - app_secrets:/run/app-secrets:ro
     ports:
       - "${API_PORT:-8080}:8080"
     networks:
@@ -61,3 +84,4 @@ networks:
 volumes:
   db_data:
   db_backups:
+  app_secrets:

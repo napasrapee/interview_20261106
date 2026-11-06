@@ -5,34 +5,34 @@ Backend API สำหรับจัดการและวิเคราะ�
 ## สิ่งที่ต้องมี
 
 - Docker และ Docker Compose v2
-- Bash, `curl` และ `openssl` (บน Windows ให้ใช้ WSL2 และเปิด WSL Integration ใน Docker Desktop)
+- สำหรับสคริปต์ใน `scripts/`: Bash และ `curl` (บน Windows ให้ใช้ WSL2 และเปิด WSL Integration ใน Docker Desktop)
 
 ## ติดตั้งและเริ่มระบบ
 
 ```bash
-# 1. สร้าง .env ด้วยค่าสุ่ม
-cp .env.example .env
-sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
-sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 48)|" .env
-sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$(openssl rand -hex 16)|" .env
-
-# 2. เริ่มระบบ
-docker compose up --build -d --wait
-
-# 3. ตรวจสอบ
-./scripts/healthcheck.sh
+docker compose up
 ```
 
-ครั้งแรกใช้เวลาประมาณ 2 ถึง 3 นาทีสำหรับการ build ระบบจะสร้างตารางและข้อมูลตัวอย่างอัตโนมัติจาก `db/init` และสร้างบัญชี Admin จาก `ADMIN_EMAIL` และ `ADMIN_PASSWORD` ใน `.env`
+คำสั่งเดียวนี้ใช้ได้ทันทีหลัง clone โดยไม่ต้องตั้งค่าอะไรเพิ่ม เมื่อระบบพร้อมจะเรียก `http://localhost:8080/health` ได้ ครั้งแรกจะใช้เวลาเพิ่มสำหรับการดาวน์โหลด image และ build
 
-ถ้าไม่เปลี่ยนค่า `change-me` หรือ `JWT_SECRET` สั้นกว่า 32 ไบต์ API จะไม่เริ่มทำงาน ดูสาเหตุได้ด้วย `docker compose logs api`
+เมื่อเริ่มครั้งแรก ระบบจะ:
+
+- สุ่มรหัสผ่าน Database, JWT secret และรหัสผ่าน Admin ลง volume `app_secrets` จึงไม่มีความลับอยู่ใน repository
+- สร้างตารางและข้อมูลตัวอย่างอัตโนมัติจาก `db/init`
+- สร้างบัญชี Admin `admin@example.com` ดูรหัสผ่านได้ด้วยคำสั่ง:
+
+```bash
+docker compose exec api cat /run/app-secrets/Admin__Password
+```
+
+ถ้าต้องการรันเบื้องหลังและรอจนพร้อมใช้ `docker compose up -d --wait` แล้วตรวจด้วย `./scripts/healthcheck.sh` และถ้าดึงโค้ดใหม่มาให้ใช้ `docker compose up --build` เพื่อไม่ให้ใช้ image เก่า
 
 ### ลองใช้งาน
 
 ```bash
-source .env
+ADMIN_PASSWORD=$(docker compose exec -T api cat /run/app-secrets/Admin__Password)
 TOKEN=$(curl -s -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+  -d "{\"email\":\"admin@example.com\",\"password\":\"$ADMIN_PASSWORD\"}" \
   http://localhost:8080/api/v1/auth/login | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
 
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/reports/department-progress
@@ -42,7 +42,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/reports/depa
 
 ```bash
 docker compose down      # หยุดระบบ ข้อมูลยังอยู่
-docker compose down -v   # ลบข้อมูลทั้งหมด รวมถึงไฟล์ backup
+docker compose down -v   # ลบข้อมูลทั้งหมด รวมถึงไฟล์ backup และความลับ
 ```
 
 ## โครงสร้างโปรเจกต์
@@ -52,22 +52,28 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 | `src/` | Domain, Application, Infrastructure, Api |
 | `tests/` | Unit test และ integration test |
 | `db/init/` | SQL สำหรับ schema, index และ seed |
-| `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh` |
+| `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh` และ `init-secrets.sh` ซึ่ง Compose เรียกใช้เอง |
 | `config/` | `logrotate.conf` |
 | `postman/` | Postman collection และ environment |
 | `docs/` | เอกสาร BA และ SA รูปแบบ `.docx` พร้อม ER diagram และ data dictionary |
 
-## การตั้งค่า (.env)
+## การตั้งค่า (ไม่บังคับ)
 
-| ตัวแปร | ความลับ | คำอธิบาย |
+ระบบทำงานได้โดยไม่มีไฟล์ `.env` ถ้าต้องการกำหนดค่าเองให้คัดลอก `.env.example` เป็น `.env` แล้วแก้ค่าที่ต้องการ
+
+| ตัวแปร | ค่าเริ่มต้น | คำอธิบาย |
 |---|---|---|
-| `POSTGRES_DB`, `POSTGRES_USER` | ไม่ | ชื่อฐานข้อมูลและผู้ใช้ |
-| `POSTGRES_PASSWORD` | ใช่ | รหัสผ่านฐานข้อมูล |
-| `API_PORT` | ไม่ | พอร์ตบนเครื่อง ค่าเริ่มต้น 8080 |
-| `JWT_SECRET` | ใช่ | ยาวอย่างน้อย 32 ไบต์ |
-| `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRES_MINUTES` | ไม่ | ค่าของ JWT |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | รหัสผ่านเป็นความลับ | Admin เริ่มต้น ใช้เมื่อยังไม่มีบัญชีนี้ |
-| `BACKUP_RETENTION_DAYS` | ไม่ | จำนวนวันที่เก็บ backup ค่าเริ่มต้น 7 |
+| `POSTGRES_DB`, `POSTGRES_USER` | `project_monitoring`, `analytics` | ชื่อฐานข้อมูลและผู้ใช้ |
+| `POSTGRES_PASSWORD` | สุ่มอัตโนมัติ | รหัสผ่านฐานข้อมูล |
+| `API_PORT` | `8080` | พอร์ตบนเครื่อง |
+| `JWT_SECRET` | สุ่มอัตโนมัติ | ต้องยาวอย่างน้อย 32 ไบต์ |
+| `JWT_ISSUER`, `JWT_AUDIENCE` | `project-monitoring`, `project-monitoring-clients` | ค่าของ JWT |
+| `JWT_EXPIRES_MINUTES` | `60` | อายุของ token |
+| `ADMIN_EMAIL` | `admin@example.com` | Admin เริ่มต้น ใช้เมื่อยังไม่มีบัญชีนี้ |
+| `ADMIN_PASSWORD` | สุ่มอัตโนมัติ | รหัสผ่าน Admin ห้ามใช้ `change-me` |
+| `BACKUP_RETENTION_DAYS` | `7` | จำนวนวันที่เก็บ backup |
+
+ความลับและชื่อฐานข้อมูลมีผลเฉพาะตอนเริ่มครั้งแรก ถ้าจะเปลี่ยนภายหลังต้องใช้ `docker compose down -v` ซึ่งจะลบข้อมูลทั้งหมด ถ้าค่าไม่ถูกต้อง API จะไม่เริ่มทำงาน ดูสาเหตุได้ด้วย `docker compose logs api`
 
 Database ไม่เปิดพอร์ตออกนอก Docker ถ้าต้องการดูข้อมูลให้ใช้:
 
@@ -142,7 +148,7 @@ Error ทุกกรณีเป็น `application/problem+json` ตาม RFC
 
 ### Postman
 
-Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/` ใส่ `adminPassword` จาก `.env` ใน environment แล้วรันทั้ง collection ตามลำดับ collection นี้ลบข้อมูลที่สร้างเองหลังรันเสร็จ ส่วนการตรวจค่ารายงานคาดว่าข้อมูลตัวอย่างยังไม่ถูกแก้ไข
+Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/` ใส่ `adminPassword` ที่ได้จากคำสั่งในหัวข้อการติดตั้งลงใน environment แล้วรันทั้ง collection ตามลำดับ collection นี้ลบข้อมูลที่สร้างเองหลังรันเสร็จ ส่วนการตรวจค่ารายงานคาดว่าข้อมูลตัวอย่างยังไม่ถูกแก้ไข
 
 ## สคริปต์ดูแลระบบ
 
