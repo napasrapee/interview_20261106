@@ -107,6 +107,8 @@ Base URL คือ `http://localhost:8080` และ endpoint ทั้งหม
 
 รายการแบบแบ่งหน้ารับ `page` และ `pageSize` (สูงสุด 100) และตอบ `items`, `page`, `pageSize`, `totalItems`, `totalPages`
 
+ใน `PUT` ถ้าไม่ส่ง `role`, `isActive`, `status`, `priority` หรือ `password` ระบบจะคงค่าเดิม
+
 **ความคืบหน้า** คือ `งานที่เสร็จ / งานทั้งหมด × 100` ยึดแผนกของโครงการ และไม่นับโครงการที่ยกเลิก
 
 ### ตัวอย่าง Request
@@ -145,6 +147,7 @@ Error ทุกกรณีเป็น `application/problem+json` ตาม RFC
 | 415 | `unsupported_media_type` | Body ไม่ใช่ JSON |
 | 429 | `rate_limited` | Login ถี่เกินกำหนด |
 | 500 | `internal_error` | ข้อผิดพลาดที่ไม่ได้คาดไว้ |
+| 503 | `database_unavailable` | Database เชื่อมต่อไม่ได้ |
 
 ### Postman
 

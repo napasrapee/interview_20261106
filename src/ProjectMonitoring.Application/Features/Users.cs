@@ -85,7 +85,7 @@ public sealed class UserService(
             request.DepartmentId,
             request.FullName,
             request.Email,
-            ParseRole(request.Role),
+            EnumCodes.ParseOr(request.Role, UserRole.Member),
             request.IsActive ?? true);
         ApplyPassword(user, request.Password);
         users.Add(user);
@@ -97,8 +97,9 @@ public sealed class UserService(
     {
         await validator.EnsureValidAsync(request, cancellationToken);
         var user = await RequireAsync(id, cancellationToken);
-        var isActive = request.IsActive ?? true;
-        var role = ParseRole(request.Role);
+        // Omitted fields keep their value: renaming a user must not change access rights.
+        var isActive = request.IsActive ?? user.IsActive;
+        var role = EnumCodes.ParseOr(request.Role, user.Role);
 
         // RULE-08: stops the only admin from locking everyone out.
         if (id == currentUser.UserId && !isActive)
@@ -136,9 +137,6 @@ public sealed class UserService(
             user.SetPasswordHash(passwordHasher.Hash(password));
         }
     }
-
-    private static UserRole ParseRole(string? role) =>
-        role is null ? UserRole.Member : EnumCodes.Parse<UserRole>(role);
 
     private async Task<User> RequireAsync(long id, CancellationToken cancellationToken) =>
         await users.FindAsync(id, cancellationToken) ?? throw new NotFoundException("User", id);

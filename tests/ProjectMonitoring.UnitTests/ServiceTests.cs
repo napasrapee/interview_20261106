@@ -188,6 +188,57 @@ public class ServiceTests
         Assert.Equal("B", user.FullName);
     }
 
+    [Fact]
+    public async Task Update_without_role_or_active_flag_keeps_access_rights()
+    {
+        var user = new User(1, "A", "a@example.com", UserRole.Manager, isActive: false);
+
+        await NewUserService(new FakeUsers(user), new FakeUnitOfWork())
+            .UpdateAsync(2, new UserRequest(1, "Renamed", "a@example.com"), None);
+
+        Assert.Equal("Renamed", user.FullName);
+        Assert.Equal(UserRole.Manager, user.Role);
+        Assert.False(user.IsActive);
+    }
+
+    [Fact]
+    public async Task Own_account_can_be_renamed_when_role_is_omitted()
+    {
+        var user = new User(1, "A", "a@example.com", UserRole.Admin, isActive: true);
+
+        var result = await NewUserService(new FakeUsers(user), new FakeUnitOfWork(), currentUserId: 5)
+            .UpdateAsync(5, new UserRequest(1, "Renamed", "a@example.com"), None);
+
+        Assert.Equal("admin", result.Role);
+    }
+
+    [Fact]
+    public async Task Task_update_without_status_or_priority_keeps_them()
+    {
+        var completedAt = DateTimeOffset.UtcNow.AddDays(-2);
+        var task = new WorkTask(1, null, "Task", null, WorkTaskStatus.Done, TaskPriority.High, null, completedAt);
+
+        var result = await NewTaskService(new FakeTasks(task), new FakeUnitOfWork(), 7, UserRole.Manager)
+            .UpdateAsync(1, new TaskRequest(1, "Renamed"), None);
+
+        Assert.Equal("done", result.Status);
+        Assert.Equal("high", result.Priority);
+        Assert.Equal(completedAt, result.CompletedAt);
+    }
+
+    [Fact]
+    public async Task Task_update_can_still_change_status_and_priority()
+    {
+        var task = new WorkTask(1, null, "Task", null, WorkTaskStatus.Done, TaskPriority.High, null, DateTimeOffset.UtcNow);
+
+        var result = await NewTaskService(new FakeTasks(task), new FakeUnitOfWork(), 7, UserRole.Manager)
+            .UpdateAsync(1, new TaskRequest(1, "Task", Status: "todo", Priority: "low"), None);
+
+        Assert.Equal("todo", result.Status);
+        Assert.Equal("low", result.Priority);
+        Assert.Null(result.CompletedAt);
+    }
+
     private static AuthService NewAuthService(FakeUsers users, FakeHasher hasher) =>
         new(users, hasher, new FakeTokens(), new FakeCurrentUser(null, null),
             NewUserService(users, new FakeUnitOfWork()), new LoginRequestValidator());

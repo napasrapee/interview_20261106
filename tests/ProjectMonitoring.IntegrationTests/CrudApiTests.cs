@@ -363,6 +363,85 @@ public class CrudApiTests(ApiFixture api) : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Put_without_optional_fields_keeps_current_values()
+    {
+        var userId = await CreateAsync(api.Admin, "/api/v1/users", new
+        {
+            departmentId = 2,
+            fullName = "Before",
+            email = "keep-values@example.com",
+            role = "manager",
+            isActive = false,
+        });
+        var user = await BodyAsync(await api.Admin.PutAsJsonAsync(
+            $"/api/v1/users/{userId}", new { departmentId = 2, fullName = "After", email = "keep-values@example.com" }));
+        Assert.Equal("After", user.GetProperty("fullName").GetString());
+        Assert.Equal("manager", user.GetProperty("role").GetString());
+        Assert.False(user.GetProperty("isActive").GetBoolean());
+
+        var projectId = await CreateAsync(api.Manager, "/api/v1/projects", new
+        {
+            departmentId = 2,
+            code = "PRJ-KEEP",
+            name = "Before",
+            status = "on_hold",
+        });
+        var project = await BodyAsync(await api.Manager.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}", new { departmentId = 2, code = "PRJ-KEEP", name = "After" }));
+        Assert.Equal("on_hold", project.GetProperty("status").GetString());
+
+        var task = await BodyAsync(await api.Manager.PostAsJsonAsync(
+            "/api/v1/tasks", new { projectId, title = "Before", status = "done", priority = "high" }));
+        var taskId = task.GetProperty("id").GetInt64();
+        var stored = await BodyAsync(await api.Manager.GetAsync($"/api/v1/tasks/{taskId}"));
+        var updated = await BodyAsync(await api.Manager.PutAsJsonAsync(
+            $"/api/v1/tasks/{taskId}", new { projectId, title = "After" }));
+        Assert.Equal("done", updated.GetProperty("status").GetString());
+        Assert.Equal("high", updated.GetProperty("priority").GetString());
+        Assert.Equal(
+            stored.GetProperty("completedAt").GetDateTimeOffset(),
+            updated.GetProperty("completedAt").GetDateTimeOffset());
+
+        var reopened = await BodyAsync(await api.Manager.PutAsJsonAsync(
+            $"/api/v1/tasks/{taskId}", new { projectId, title = "After", status = "todo" }));
+        Assert.Equal("todo", reopened.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, reopened.GetProperty("completedAt").ValueKind);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await api.Manager.DeleteAsync($"/api/v1/projects/{projectId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await api.Admin.DeleteAsync($"/api/v1/users/{userId}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_rename_own_account_without_sending_role()
+    {
+        var path = $"/api/v1/users/{api.AdminId}";
+        var me = await BodyAsync(await api.Admin.GetAsync(path));
+
+        var response = await api.Admin.PutAsJsonAsync(path, new
+        {
+            departmentId = me.GetProperty("departmentId").GetInt64(),
+            fullName = me.GetProperty("fullName").GetString(),
+            email = me.GetProperty("email").GetString(),
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("admin", (await BodyAsync(response)).GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public async Task Database_outage_is_503_and_other_database_errors_are_500()
+    {
+        var outage = await AssertProblemAsync(
+            await api.Admin.GetAsync("/test/database-outage"),
+            HttpStatusCode.ServiceUnavailable, "database_unavailable");
+        Assert.DoesNotContain("secret database detail", outage.GetRawText(), StringComparison.Ordinal);
+
+        await AssertProblemAsync(
+            await api.Admin.GetAsync("/test/database-error"),
+            HttpStatusCode.InternalServerError, "internal_error");
+    }
+
+    [Fact]
     public async Task Null_characters_are_rejected_instead_of_failing_in_the_database()
     {
         await AssertProblemAsync(

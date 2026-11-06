@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +21,7 @@ public static class ErrorCodes
     public const string UnsupportedMediaType = "unsupported_media_type";
     public const string RateLimited = "rate_limited";
     public const string InternalError = "internal_error";
+    public const string DatabaseUnavailable = "database_unavailable";
 }
 
 /// <summary>Builds the single error format of the API: RFC 9457 problem+json.</summary>
@@ -148,7 +150,24 @@ public sealed class ErrorHandlingMiddleware(
             context, 404, ErrorCodes.NotFound, "Not found", exception.Message),
         ConflictException => Problems.Create(
             context, 409, ErrorCodes.Conflict, "Conflict", exception.Message),
+        _ when IsDatabaseOutage(exception) => Problems.Create(
+            context, 503, ErrorCodes.DatabaseUnavailable, "Service unavailable",
+            "The database is not available. Try again later."),
         _ => Problems.Create(
             context, 500, ErrorCodes.InternalError, "Internal server error", "An unexpected error occurred."),
     };
+
+    // EF Core may wrap the driver's exception. DbException keeps this layer free of Npgsql.
+    private static bool IsDatabaseOutage(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException { IsTransient: true })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

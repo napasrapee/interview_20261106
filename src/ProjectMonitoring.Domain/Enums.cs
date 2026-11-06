@@ -35,6 +35,10 @@ public static class EnumCodes
     public static bool IsValid<TEnum>(string? code) where TEnum : struct, Enum =>
         Enum.GetValues<TEnum>().Any(value => value.ToCode() == code);
 
+    /// <summary>Returns <paramref name="fallback"/> when no code was supplied.</summary>
+    public static TEnum ParseOr<TEnum>(string? code, TEnum fallback) where TEnum : struct, Enum =>
+        code is null ? fallback : Parse<TEnum>(code);
+
     public static TEnum Parse<TEnum>(string code) where TEnum : struct, Enum
     {
         foreach (var value in Enum.GetValues<TEnum>())

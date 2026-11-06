@@ -31,6 +31,19 @@ public sealed class PolicyProbeController : ControllerBase
 
     [HttpGet("boom")]
     public IActionResult Boom() => throw new InvalidOperationException("secret internal detail");
+
+    [HttpGet("database-outage")]
+    public IActionResult DatabaseOutage() =>
+        throw new InvalidOperationException("wrapper", new FakeDbException(isTransient: true));
+
+    [HttpGet("database-error")]
+    public IActionResult DatabaseError() =>
+        throw new InvalidOperationException("wrapper", new FakeDbException(isTransient: false));
+}
+
+public sealed class FakeDbException(bool isTransient) : System.Data.Common.DbException("secret database detail")
+{
+    public override bool IsTransient { get; } = isTransient;
 }
 
 public class AuthApiTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixture>

@@ -91,7 +91,7 @@ public sealed class ProjectService(
             request.Code,
             request.Name,
             request.Description,
-            ParseStatus(request.Status),
+            EnumCodes.ParseOr(request.Status, ProjectStatus.Planned),
             request.StartDate,
             request.EndDate,
             request.Budget);
@@ -110,7 +110,7 @@ public sealed class ProjectService(
             request.Code,
             request.Name,
             request.Description,
-            ParseStatus(request.Status),
+            EnumCodes.ParseOr(request.Status, project.Status),
             request.StartDate,
             request.EndDate,
             request.Budget);
@@ -123,9 +123,6 @@ public sealed class ProjectService(
         projects.Remove(await RequireAsync(id, cancellationToken));
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
-
-    private static ProjectStatus ParseStatus(string? status) =>
-        status is null ? ProjectStatus.Planned : EnumCodes.Parse<ProjectStatus>(status);
 
     private async Task<Project> RequireAsync(long id, CancellationToken cancellationToken) =>
         await projects.FindAsync(id, cancellationToken) ?? throw new NotFoundException("Project", id);

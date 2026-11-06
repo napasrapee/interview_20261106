@@ -102,8 +102,8 @@ public sealed class TaskService(
             request.AssigneeUserId,
             request.Title,
             request.Description,
-            ParseStatus(request.Status),
-            ParsePriority(request.Priority),
+            EnumCodes.ParseOr(request.Status, WorkTaskStatus.Todo),
+            EnumCodes.ParseOr(request.Priority, TaskPriority.Medium),
             request.DueDate,
             timeProvider.GetUtcNow());
         tasks.Add(task);
@@ -120,8 +120,8 @@ public sealed class TaskService(
             request.AssigneeUserId,
             request.Title,
             request.Description,
-            ParseStatus(request.Status),
-            ParsePriority(request.Priority),
+            EnumCodes.ParseOr(request.Status, task.Status),
+            EnumCodes.ParseOr(request.Priority, task.Priority),
             request.DueDate,
             timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -149,12 +149,6 @@ public sealed class TaskService(
         tasks.Remove(await RequireAsync(id, cancellationToken));
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
-
-    private static WorkTaskStatus ParseStatus(string? status) =>
-        status is null ? WorkTaskStatus.Todo : EnumCodes.Parse<WorkTaskStatus>(status);
-
-    private static TaskPriority ParsePriority(string? priority) =>
-        priority is null ? TaskPriority.Medium : EnumCodes.Parse<TaskPriority>(priority);
 
     private async Task<WorkTask> RequireAsync(long id, CancellationToken cancellationToken) =>
         await tasks.FindAsync(id, cancellationToken) ?? throw new NotFoundException("Task", id);
