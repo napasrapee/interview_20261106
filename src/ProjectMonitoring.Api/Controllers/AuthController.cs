@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Api.Security;
+using ProjectMonitoring.Application.Features.Auth;
+using ProjectMonitoring.Application.Features.Users;
 
 namespace ProjectMonitoring.Api.Controllers;
 

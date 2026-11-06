@@ -1,5 +1,6 @@
 using Npgsql;
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Application.Abstractions;
+using ProjectMonitoring.Application.Features.Reports;
 
 namespace ProjectMonitoring.Infrastructure.Persistence;
 

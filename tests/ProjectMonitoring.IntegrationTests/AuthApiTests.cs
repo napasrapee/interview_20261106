@@ -4,47 +4,13 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using ProjectMonitoring.Api;
 using ProjectMonitoring.Application.Abstractions;
 
 namespace ProjectMonitoring.IntegrationTests;
-
-/// <summary>Role-protected endpoints that exist only in tests, until the real ones are added.</summary>
-[ApiController]
-[Route("test")]
-public sealed class PolicyProbeController : ControllerBase
-{
-    [HttpGet("admin")]
-    [Authorize(Policy = Policies.AdminOnly)]
-    public IActionResult Admin() => Ok();
-
-    [HttpGet("manager")]
-    [Authorize(Policy = Policies.ManagerOrAdmin)]
-    public IActionResult Manager() => Ok();
-
-    [HttpGet("boom")]
-    public IActionResult Boom() => throw new InvalidOperationException("secret internal detail");
-
-    [HttpGet("database-outage")]
-    public IActionResult DatabaseOutage() =>
-        throw new InvalidOperationException("wrapper", new FakeDbException(isTransient: true));
-
-    [HttpGet("database-error")]
-    public IActionResult DatabaseError() =>
-        throw new InvalidOperationException("wrapper", new FakeDbException(isTransient: false));
-}
-
-public sealed class FakeDbException(bool isTransient) : System.Data.Common.DbException("secret database detail")
-{
-    public override bool IsTransient { get; } = isTransient;
-}
 
 public class AuthApiTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixture>
 {

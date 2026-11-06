@@ -1,4 +1,6 @@
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Application.Features.Projects;
+using ProjectMonitoring.Application.Features.Tasks;
+using ProjectMonitoring.Application.Features.Users;
 
 namespace ProjectMonitoring.UnitTests;
 

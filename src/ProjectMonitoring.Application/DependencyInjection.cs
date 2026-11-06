@@ -1,7 +1,13 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Application.Features.Auth;
+using ProjectMonitoring.Application.Features.Departments;
+using ProjectMonitoring.Application.Features.Logs;
+using ProjectMonitoring.Application.Features.Projects;
+using ProjectMonitoring.Application.Features.Reports;
+using ProjectMonitoring.Application.Features.Tasks;
+using ProjectMonitoring.Application.Features.Users;
 
 namespace ProjectMonitoring.Application;
 

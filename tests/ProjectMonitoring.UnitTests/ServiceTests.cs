@@ -1,6 +1,8 @@
 using ProjectMonitoring.Application.Abstractions;
 using ProjectMonitoring.Application.Common;
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Application.Features.Auth;
+using ProjectMonitoring.Application.Features.Tasks;
+using ProjectMonitoring.Application.Features.Users;
 using ProjectMonitoring.Domain;
 
 namespace ProjectMonitoring.UnitTests;

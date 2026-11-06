@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ProjectMonitoring.Application.Features;
+using ProjectMonitoring.Api.Security;
+using ProjectMonitoring.Application.Features.Reports;
 
 namespace ProjectMonitoring.Api.Controllers;
 

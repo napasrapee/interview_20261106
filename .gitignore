@@ -16,6 +16,6 @@ TestResults/
 # IDE
 .vs/
 
-# Runtime output
-logs/
-backups/
+# Runtime output. Anchored to the root, so source folders such as Features/Logs stay tracked.
+/logs/
+/backups/
