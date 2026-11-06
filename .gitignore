@@ -1,3 +1,21 @@
 # Markdown stays local, except the README
 *.md
 !README.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+
+# IDE
+.vs/
+
+# Runtime output
+logs/
+backups/
