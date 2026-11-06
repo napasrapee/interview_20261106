@@ -159,8 +159,8 @@ Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/
 | สคริปต์ | หน้าที่ | Exit code |
 |---|---|---|
 | `scripts/backup.sh` | `pg_dump` + `gzip` ลง volume `db_backups` ตรวจไฟล์ และลบไฟล์เกินกำหนด | `0` สำเร็จ, `1` ล้มเหลวหรือ `db` ไม่ทำงาน, `2` เรียก Docker ไม่ได้หรือค่าผิด |
-| `scripts/healthcheck.sh` | ตรวจสถานะ container และเรียก `/health` | `0` ปกติ, `1` มีบริการไม่พร้อม, `2` เรียก Docker ไม่ได้ |
-| `scripts/resource_usage.sh` | แสดง CPU, Memory, Network และ Disk จาก `docker stats` | `0` สำเร็จ, `1` มีบริการไม่ทำงาน, `2` เรียก Docker ไม่ได้ |
+| `scripts/healthcheck.sh` | ตรวจสถานะ container และเรียก `/health` | `0` ปกติ, `1` มีบริการไม่พร้อม, `2` ไม่มี Docker หรือ `curl` |
+| `scripts/resource_usage.sh` | แสดง CPU, Memory, Network และ Block I/O จาก `docker stats` พร้อมขนาด volume, พื้นที่ว่าง และ `docker system df` | `0` สำเร็จ, `1` มีบริการไม่ทำงาน, `2` เรียก Docker ไม่ได้ |
 | `scripts/rotate_logs.sh` | หมุน log และลบ `system_logs` ที่เกินอายุ โดย `--simulate` ใช้จำลองการทำงาน | `0` สำเร็จ, `1` ล้มเหลวหรือ `db` ไม่ทำงาน, `2` ไม่มี logrotate หรือ Docker, หรือค่าผิด |
 
 ### กู้คืนข้อมูล

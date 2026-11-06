@@ -4,7 +4,7 @@
 #
 # Usage:     ./scripts/healthcheck.sh
 # Settings:  API_PORT (environment, then .env, then 8080)
-# Exit code: 0 everything healthy, 1 a service is not ready, 2 Docker unavailable
+# Exit code: 0 everything healthy, 1 a service is not ready, 2 Docker or curl unavailable
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -23,6 +23,7 @@ read_port() {
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker command not found." >&2; exit 2; }
 docker info >/dev/null 2>&1 || { echo "ERROR: Cannot reach the Docker daemon." >&2; exit 2; }
+command -v curl >/dev/null 2>&1 || { echo "ERROR: curl command not found." >&2; exit 2; }
 
 status=0
 
