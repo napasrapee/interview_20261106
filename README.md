@@ -9,6 +9,8 @@ Backend API สำหรับจัดการและวิเคราะ�
 - Docker และ Docker Compose v2
 - สำหรับสคริปต์ใน `scripts/`: Bash และ `curl` (บน Windows ให้ใช้ WSL2 และเปิด WSL Integration ใน Docker Desktop)
 
+ดูสเปกเครื่อง, เว็บที่ต้องเข้าถึงได้, ขั้นตอนทีละข้อ และการแก้ปัญหาได้ที่ [INSTALL.txt](INSTALL.txt)
+
 ## ติดตั้งและเริ่มระบบ
 
 ```bash

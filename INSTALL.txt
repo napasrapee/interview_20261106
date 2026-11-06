@@ -1,0 +1,231 @@
+Containerized Business Analytics System
+สิ่งที่เครื่องต้องมี และขั้นตอนการติดตั้ง
+======================================================================
+
+สรุป: ติดตั้ง Git กับ Docker แล้วรันคำสั่งเดียว
+
+    git clone https://github.com/napasrapee/interview_20261106.git
+    cd interview_20261106
+    docker compose up -d --wait
+
+ไม่ต้องติดตั้ง .NET, PostgreSQL หรือสร้างไฟล์ตั้งค่า เพราะทุกอย่างรันใน Docker
+และระบบสุ่มรหัสผ่านให้เองตอนเริ่มครั้งแรก
+
+
+1. สิ่งที่เครื่องต้องมี
+----------------------------------------------------------------------
+
+จำเป็น
+
+  รายการ                  รายละเอียด
+  ----------------------  --------------------------------------------
+  Docker Engine           Linux: Docker Engine
+                          Windows, macOS: Docker Desktop
+  Docker Compose v2       ใช้คำสั่ง "docker compose" แบบไม่มีขีด
+                          มาพร้อม Docker Desktop
+  Git                     ใช้ดาวน์โหลดโปรเจกต์
+  พอร์ต 8080              ต้องว่าง หรือเปลี่ยนได้ตามข้อ 6
+  อินเทอร์เน็ต             ใช้ตอนติดตั้งครั้งแรก ดูข้อ 2
+
+ทรัพยากรเครื่อง
+
+  รายการ      แนะนำ        ที่มาของตัวเลข
+  ----------  -----------  -------------------------------------------
+  CPU         2 core       ระบบจำกัด db และ api ไว้ตัวละ 1 CPU
+  RAM         4 GB         ระบบจำกัด db 1 GB และ api 512 MB
+                           ตอนไม่มีงานใช้จริงประมาณ 100 MB
+                           ส่วนที่เหลือเผื่อ Docker และการ build
+  ดิสก์ว่าง    5 GB         image ที่ใช้งาน 800 MB รวมกับ SDK สำหรับ build
+                           และข้อมูล, backup, log
+
+ตัวเลขข้างต้นเป็นค่าแนะนำจากการวัดบนเครื่องทดสอบ ยังไม่ได้ทดสอบหาค่าต่ำสุด
+
+เสริม ติดตั้งเฉพาะเมื่อต้องการใช้งานนั้น
+
+  รายการ            ใช้ทำอะไร
+  ----------------  --------------------------------------------------
+  Bash, curl        รันสคริปต์ใน scripts/
+                    บน Windows ให้ใช้ WSL2
+  logrotate         รัน scripts/rotate_logs.sh
+                    ติดตั้ง: sudo apt-get install -y logrotate
+  .NET SDK 10       รัน dotnet test และแก้โค้ด ต้องเปิด Docker ด้วย
+                    ใช้รุ่น 10.0.403 ขึ้นไปตาม global.json
+  Postman           ทดสอบ API ด้วยไฟล์ใน postman/
+                    หรือใช้ Newman ผ่าน Docker โดยไม่ต้องติดตั้ง
+
+
+2. เว็บที่ต้องเข้าถึงได้ตอนติดตั้งครั้งแรก
+----------------------------------------------------------------------
+
+ถ้าอยู่หลัง firewall หรือ proxy ต้องอนุญาตให้เข้าถึง:
+
+  github.com             ดาวน์โหลดโปรเจกต์
+  docker.io              postgres:18-alpine
+  mcr.microsoft.com      .NET SDK และ ASP.NET Runtime
+  api.nuget.org          NuGet package ตอน build
+  deb.debian.org         ติดตั้ง curl ใน image ของ API
+
+
+3. สภาพแวดล้อมที่ทดสอบแล้ว
+----------------------------------------------------------------------
+
+ทดสอบแล้ว
+
+  - Windows 11, WSL2 Ubuntu 26.04, Docker Desktop, x86_64
+  - Docker Engine 29.8.2, Docker Compose 5.5.1
+  - รันระบบได้ทั้งจาก Bash ใน WSL และ PowerShell บน Windows
+    ส่วนสคริปต์ใน scripts/ ต้องรันใน Bash
+
+ยังไม่ได้ทดสอบ
+
+  - Linux ที่ไม่ได้รันผ่าน WSL2
+  - macOS และเครื่อง ARM เช่น Apple Silicon
+  - Docker Compose รุ่นเก่ากว่าที่ระบุข้างต้น
+
+
+4. ขั้นตอนการติดตั้ง
+----------------------------------------------------------------------
+
+4.1 ติดตั้ง Git และ Docker
+
+    Git:    https://git-scm.com/downloads
+    Docker: https://docs.docker.com/get-docker/
+
+    Linux: เพิ่มผู้ใช้เข้ากลุ่ม docker แล้ว logout และ login ใหม่
+
+        sudo usermod -aG docker $USER
+
+    Windows: ติดตั้ง WSL2 และ Docker Desktop แล้วเปิด Docker Desktop
+    ถ้าจะรันสคริปต์ใน WSL ให้เปิด Settings > Resources > WSL Integration
+
+4.2 ตรวจว่าเครื่องพร้อม
+
+    git --version
+    docker --version
+    docker compose version
+    docker info
+
+    ถ้า docker info ขึ้น error แปลว่า Docker ยังไม่ทำงาน
+
+4.3 ดาวน์โหลดโปรเจกต์
+
+    git clone https://github.com/napasrapee/interview_20261106.git
+    cd interview_20261106
+
+4.4 เริ่มระบบ
+
+    docker compose up -d --wait
+
+    บนเครื่องทดสอบใช้เวลาประมาณ 2 นาที ไม่นับเวลาดาวน์โหลด image พื้นฐาน
+    เมื่อคำสั่งจบโดยไม่มี error แปลว่าระบบพร้อมแล้ว
+
+    ถ้าต้องการดู log บนหน้าจอให้ใช้ "docker compose up" แทน
+    และกด Ctrl+C เมื่อต้องการหยุด
+
+4.5 ตรวจว่าระบบทำงาน
+
+    เปิด http://localhost:8080/health ต้องเห็น "status":"healthy"
+
+    หรือรันใน Bash:
+
+        ./scripts/healthcheck.sh
+
+4.6 Login ครั้งแรก
+
+    อีเมล:    admin@example.com
+    รหัสผ่าน: ระบบสุ่มให้ ดูได้ด้วยคำสั่ง
+
+        docker compose exec api cat /run/app-secrets/Admin__Password
+
+    ตัวอย่างใน Bash:
+
+        ADMIN_PASSWORD=$(docker compose exec -T api cat /run/app-secrets/Admin__Password)
+        TOKEN=$(curl -s -H 'Content-Type: application/json' \
+          -d "{\"email\":\"admin@example.com\",\"password\":\"$ADMIN_PASSWORD\"}" \
+          http://localhost:8080/api/v1/auth/login | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
+
+        curl -H "Authorization: Bearer $TOKEN" \
+          http://localhost:8080/api/v1/reports/department-progress
+
+    ตัวอย่างใน PowerShell:
+
+        $password = docker compose exec -T api cat /run/app-secrets/Admin__Password
+        $body = @{ email = 'admin@example.com'; password = $password } | ConvertTo-Json
+        $login = Invoke-RestMethod -Method Post -ContentType application/json -Body $body `
+          -Uri http://localhost:8080/api/v1/auth/login
+        Invoke-RestMethod -Headers @{ Authorization = "Bearer $($login.accessToken)" } `
+          -Uri http://localhost:8080/api/v1/reports/department-progress
+
+    รายละเอียด API ทั้งหมดอยู่ใน README.md
+
+
+5. คำสั่งที่ใช้บ่อย
+----------------------------------------------------------------------
+
+    docker compose ps                     ดูสถานะ
+    docker compose logs api               ดู log ของ API
+    docker compose down                   หยุดระบบ ข้อมูลยังอยู่
+    docker compose up -d --wait           เริ่มระบบอีกครั้ง
+    docker compose up -d --build --wait   เริ่มระบบหลังดึงโค้ดใหม่
+
+    ./scripts/backup.sh                   สำรองข้อมูล
+    ./scripts/healthcheck.sh              ตรวจสุขภาพระบบ
+    ./scripts/resource_usage.sh           ดู CPU, Memory และดิสก์
+    ./scripts/rotate_logs.sh --simulate   จำลองการหมุน log
+
+ลบข้อมูลทั้งหมด รวมถึง backup และรหัสผ่านที่สุ่มไว้ คืนค่าไม่ได้:
+
+    docker compose down -v
+
+
+6. การตั้งค่าเพิ่มเติม (ไม่บังคับ)
+----------------------------------------------------------------------
+
+คัดลอก .env.example เป็น .env แล้วแก้ค่าที่ต้องการ เช่น เปลี่ยนพอร์ต:
+
+    API_PORT=9090
+
+รหัสผ่านและชื่อฐานข้อมูลมีผลเฉพาะตอนเริ่มครั้งแรก
+ถ้าเปลี่ยนภายหลังต้องใช้ "docker compose down -v" ซึ่งจะลบข้อมูลทั้งหมด
+
+
+7. แก้ปัญหาที่พบบ่อย
+----------------------------------------------------------------------
+
+อาการ: Cannot connect to the Docker daemon
+แก้:   เปิด Docker Desktop หรือรัน sudo systemctl start docker
+
+อาการ: permission denied บน Linux
+แก้:   เพิ่มผู้ใช้เข้ากลุ่ม docker ตามข้อ 4.1 แล้ว login ใหม่
+
+อาการ: driver failed programming external connectivity
+       หรือ port is already allocated
+แก้:   พอร์ต 8080 ถูกใช้อยู่ ให้เปลี่ยน API_PORT ตามข้อ 6
+
+อาการ: The command 'docker' could not be found ใน WSL
+แก้:   เปิด WSL Integration ใน Docker Desktop แล้วกด Apply & Restart
+
+อาการ: docker compose up ค้างที่ build หรือดาวน์โหลดไม่สำเร็จ
+แก้:   ตรวจอินเทอร์เน็ต และเว็บในข้อ 2
+
+อาการ: API restart วนซ้ำ
+แก้:   ดูสาเหตุด้วย docker compose logs api
+       มักเกิดจากค่าใน .env ไม่ถูกต้อง เช่น JWT_SECRET สั้นกว่า 32 ไบต์
+
+อาการ: ดึงโค้ดใหม่แล้วระบบยังทำงานแบบเดิม
+แก้:   รัน docker compose up -d --build --wait
+
+อาการ: Permission denied ตอนรันสคริปต์
+แก้:   รันด้วย bash scripts/ชื่อสคริปต์.sh หรือ chmod +x scripts/*.sh
+
+อาการ: login ได้ 429
+แก้:   login เกิน 10 ครั้งต่อนาที ให้รอ 1 นาที
+
+
+8. ถอนการติดตั้ง
+----------------------------------------------------------------------
+
+    docker compose down -v --rmi local
+
+จากนั้นลบโฟลเดอร์โปรเจกต์ได้เลย ส่วน image postgres:18-alpine และ
+image ของ .NET ที่ใช้ร่วมกับโปรเจกต์อื่นได้ ต้องลบเองถ้าไม่ใช้แล้ว
