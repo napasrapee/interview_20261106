@@ -78,6 +78,15 @@ services:
       retries: 5
       start_period: 15s
 
+  # Runs only when started by name, for scripts/rotate_logs.sh --simulate.
+  log-simulator:
+    image: postgres:18-alpine
+    profiles: ["tools"]
+    entrypoint: ["sh", "-c", "base64 /dev/urandom | head -c 41943040"]
+    network_mode: none
+    restart: "no"
+    logging: *logging
+
 networks:
   analytics_net:
 

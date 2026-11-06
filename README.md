@@ -52,7 +52,7 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 | `src/` | Domain, Application, Infrastructure, Api |
 | `tests/` | Unit test และ integration test |
 | `db/init/` | SQL สำหรับ schema, index และ seed |
-| `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh` และ `init-secrets.sh` ซึ่ง Compose เรียกใช้เอง |
+| `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh`, `rotate_logs.sh` และ `init-secrets.sh` ซึ่ง Compose เรียกใช้เอง |
 | `config/` | `logrotate.conf` |
 | `postman/` | Postman collection และ environment |
 | `docs/` | เอกสาร BA และ SA รูปแบบ `.docx` พร้อม ER diagram และ data dictionary |
@@ -72,6 +72,7 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 | `ADMIN_EMAIL` | `admin@example.com` | Admin เริ่มต้น ใช้เมื่อยังไม่มีบัญชีนี้ |
 | `ADMIN_PASSWORD` | สุ่มอัตโนมัติ | รหัสผ่าน Admin ห้ามใช้ `change-me` |
 | `BACKUP_RETENTION_DAYS` | `7` | จำนวนวันที่เก็บ backup |
+| `LOG_RETENTION_DAYS` | `30` | จำนวนวันที่เก็บแถวใน `system_logs` |
 
 ความลับและชื่อฐานข้อมูลมีผลเฉพาะตอนเริ่มครั้งแรก ถ้าจะเปลี่ยนภายหลังต้องใช้ `docker compose down -v` ซึ่งจะลบข้อมูลทั้งหมด ถ้าค่าไม่ถูกต้อง API จะไม่เริ่มทำงาน ดูสาเหตุได้ด้วย `docker compose logs api`
 
@@ -160,6 +161,7 @@ Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/
 | `scripts/backup.sh` | `pg_dump` + `gzip` ลง volume `db_backups` ตรวจไฟล์ และลบไฟล์เกินกำหนด | `0` สำเร็จ, `1` ล้มเหลวหรือ `db` ไม่ทำงาน, `2` เรียก Docker ไม่ได้หรือค่าผิด |
 | `scripts/healthcheck.sh` | ตรวจสถานะ container และเรียก `/health` | `0` ปกติ, `1` มีบริการไม่พร้อม, `2` เรียก Docker ไม่ได้ |
 | `scripts/resource_usage.sh` | แสดง CPU, Memory, Network และ Disk จาก `docker stats` | `0` สำเร็จ, `1` มีบริการไม่ทำงาน, `2` เรียก Docker ไม่ได้ |
+| `scripts/rotate_logs.sh` | หมุน log และลบ `system_logs` ที่เกินอายุ โดย `--simulate` ใช้จำลองการทำงาน | `0` สำเร็จ, `1` ล้มเหลวหรือ `db` ไม่ทำงาน, `2` ไม่มี logrotate หรือ Docker, หรือค่าผิด |
 
 ### กู้คืนข้อมูล
 
@@ -173,14 +175,23 @@ docker compose exec -T db sh -c 'gunzip -c /backups/<ไฟล์> | psql -U "$P
 
 ### Log rotation
 
+ป้องกัน log โตจน Disk เต็ม 3 ส่วน:
+
 - **Log ของ container:** จำกัดไฟล์ละ 10 MB สูงสุด 3 ไฟล์ ตั้งค่าใน `docker-compose.yml`
-- **Log ของสคริปต์ใน `logs/`:** หมุนรายวัน เก็บ 7 รอบ และบีบอัดด้วย `config/logrotate.conf`
+- **Log ของสคริปต์ใน `logs/`:** หมุนทุกวัน หรือทันทีที่เกิน 10 MB เมื่อรัน `rotate_logs.sh` เก็บ 7 รอบและบีบอัด ตั้งค่าใน `config/logrotate.conf`
+- **ตาราง `system_logs`:** ลบแถวที่เก่ากว่า `LOG_RETENTION_DAYS` เมื่อรัน `rotate_logs.sh`
+
+ดูการทำงานจริงได้ด้วยการจำลอง ซึ่งสร้าง log ปริมาณมากแล้วแสดงขนาดก่อนและหลัง โดยไม่แตะ log จริงและข้อมูลในระบบ:
+
+```bash
+./scripts/rotate_logs.sh --simulate
+```
 
 ### ตั้งเวลาด้วย cron
 
 ```cron
 0 2 * * * cd /path/to/project && mkdir -p logs && ./scripts/backup.sh >> logs/backup.log 2>&1
-0 3 * * * cd /path/to/project && /usr/sbin/logrotate --state logs/.logrotate.state config/logrotate.conf
+0 * * * * cd /path/to/project && mkdir -p logs && ./scripts/rotate_logs.sh >> logs/rotate.log 2>&1
 ```
 
 ## การทดสอบ
