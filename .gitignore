@@ -1,0 +1,3 @@
+# Markdown stays local, except the README
+*.md
+!README.md
