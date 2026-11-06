@@ -1,0 +1,55 @@
+name: analytics
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db_data:/var/lib/postgresql
+      - db_backups:/backups
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - analytics_net
+    healthcheck:
+      # -h forces TCP: the temporary server used during init listens on a socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__Secret: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER in .env}
+      Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE in .env}
+      Jwt__ExpiresMinutes: ${JWT_EXPIRES_MINUTES:-60}
+      Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    networks:
+      - analytics_net
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "4", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  analytics_net:
+
+volumes:
+  db_data:
+  db_backups:

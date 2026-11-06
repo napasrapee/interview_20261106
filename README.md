@@ -2,7 +2,19 @@
 
 Backend API สำหรับจัดการและวิเคราะห์ข้อมูลโครงการ (Project Monitoring) พัฒนาด้วย .NET 10 แบบ Clean Architecture และ PostgreSQL
 
-> สถานะ: อยู่ระหว่างพัฒนา ขณะนี้มีเฉพาะโครงโปรเจกต์ ยังไม่มี API และ `docker-compose.yml`
+> สถานะ: อยู่ระหว่างพัฒนา ขณะนี้มี Database และ `GET /health` ยังไม่มี endpoint ธุรกิจ
+
+## ติดตั้งและเริ่มระบบ
+
+ต้องมี Docker และ Docker Compose v2
+
+```bash
+cp .env.example .env
+# แก้ทุกค่า change-me ใน .env
+docker compose up --build
+```
+
+ตรวจสอบได้ที่ `http://localhost:8080/health`
 
 ## โครงสร้างโปรเจกต์
 
