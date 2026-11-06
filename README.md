@@ -2,6 +2,8 @@
 
 Backend API สำหรับจัดการและวิเคราะห์ข้อมูลโครงการ (Project Monitoring) พัฒนาด้วย .NET 10 แบบ Clean Architecture และ PostgreSQL 18 รันด้วย Docker Compose พร้อมรายงานความคืบหน้าแยกตามแผนก และสคริปต์ดูแลระบบบน Linux
 
+> **หมายเหตุเทียบกับโจทย์:** โจทย์กำหนด stack เป็น .NET 8 ขึ้นไป แต่บางหัวข้อเขียนว่า Node.js โปรเจกต์นี้ยึดตาม stack จึงใช้ .NET 10 และเพิ่มตาราง `departments` จากที่โจทย์ระบุ เพราะรายงานต้องแยกตามแผนก
+
 ## สิ่งที่ต้องมี
 
 - Docker และ Docker Compose v2
@@ -13,7 +15,7 @@ Backend API สำหรับจัดการและวิเคราะ�
 docker compose up
 ```
 
-คำสั่งเดียวนี้ใช้ได้ทันทีหลัง clone โดยไม่ต้องตั้งค่าอะไรเพิ่ม เมื่อระบบพร้อมจะเรียก `http://localhost:8080/health` ได้ ครั้งแรกจะใช้เวลาเพิ่มสำหรับการดาวน์โหลด image และ build
+คำสั่งเดียวนี้ใช้ได้ทันทีหลัง clone โดยไม่ต้องตั้งค่าอะไรเพิ่ม เมื่อระบบพร้อมจะเรียก `http://localhost:8080/health` ได้ ครั้งแรกใช้เวลาประมาณ 2 นาทีบนเครื่องทดสอบ ไม่นับเวลาดาวน์โหลด image พื้นฐานซึ่งขึ้นกับความเร็วอินเทอร์เน็ต
 
 เมื่อเริ่มครั้งแรก ระบบจะ:
 
@@ -24,6 +26,8 @@ docker compose up
 ```bash
 docker compose exec api cat /run/app-secrets/Admin__Password
 ```
+
+ผู้ใช้ในข้อมูลตัวอย่างไม่มีรหัสผ่านจึง login ไม่ได้ ถ้าต้องการทดสอบ role อื่นให้ Admin สร้างบัญชีด้วย `POST /api/v1/users` หรือรัน Postman collection ซึ่งสร้างบัญชีทดสอบให้เอง
 
 ถ้าต้องการรันเบื้องหลังและรอจนพร้อมใช้ `docker compose up -d --wait` แล้วตรวจด้วย `./scripts/healthcheck.sh` และถ้าดึงโค้ดใหม่มาให้ใช้ `docker compose up --build` เพื่อไม่ให้ใช้ image เก่า
 
@@ -56,6 +60,42 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 | `config/` | `logrotate.conf` |
 | `postman/` | Postman collection และ environment |
 | `docs/` | เอกสาร BA และ SA รูปแบบ `.docx` พร้อม ER diagram และ data dictionary |
+
+## สถาปัตยกรรม
+
+Dependency ชี้เข้าหา Domain เสมอ: Api และ Infrastructure อ้าง Application และ Application อ้าง Domain
+
+![Clean Architecture Layers](docs/images/SA-01.png)
+
+### ฐานข้อมูล
+
+![ER Diagram](docs/images/SA-02.png)
+
+| ตาราง | หน้าที่ | ความสัมพันธ์ |
+|---|---|---|
+| `departments` | แผนก ซึ่งเป็นแกนของรายงาน | มีผู้ใช้และโครงการหลายรายการ ลบไม่ได้ถ้ายังถูกใช้ |
+| `users` | บัญชีผู้ใช้และผู้รับผิดชอบงาน | สังกัดแผนก |
+| `projects` | โครงการ | สังกัดแผนก มีผู้รับผิดชอบได้ไม่เกิน 1 คน |
+| `tasks` | งานในโครงการ | ถูกลบตามโครงการ (`CASCADE`) มีผู้รับงานได้ไม่เกิน 1 คน |
+| `system_logs` | เหตุการณ์ของ API | อ้างผู้ใช้ และเป็น `NULL` เมื่อผู้ใช้ถูกลบ (`SET NULL`) |
+
+ความสามารถของ PostgreSQL ที่ใช้:
+
+- **Constraint:** identity column, CHECK ข้ามคอลัมน์ (`completed_at` ต้องสอดคล้องกับ `status`) และ FK แบบ `RESTRICT`, `CASCADE`, `SET NULL`
+- **Index:** unique index บน `lower(email)` และ partial index สำหรับงานที่ยังไม่เสร็จ
+- **อื่น ๆ:** trigger ปรับ `updated_at`, `JSONB` ใน `system_logs` และ `COMMENT ON` ซึ่งดูได้ด้วย `\d+ tasks`
+- **รายงาน:** CTE, `LEFT JOIN`, aggregate `FILTER` และ window function `RANK()`
+
+### Container
+
+![Deployment Diagram](docs/images/SA-08.png)
+
+- **Image:** multi-stage build และรันด้วยผู้ใช้ non-root
+- **ลำดับการเริ่ม:** `secrets-init` จบก่อน `db` ต้อง healthy แล้ว `api` จึงเริ่ม
+- **Network:** `db` อยู่ใน `analytics_backend` แบบ internal และไม่เปิดพอร์ตออกนอก ส่วน `api` เชื่อมทั้ง `analytics_frontend` และ `analytics_backend`
+- **Volume:** `db_data`, `db_backups`, `app_secrets`
+- **ทรัพยากร:** `db` 1 CPU / 1 GB และ `api` 1 CPU / 512 MB
+- **ลดสิทธิ์:** ทุก container ใช้ `no-new-privileges` และ `api` ใช้ `read_only` กับ `cap_drop: ALL`
 
 ## การตั้งค่า (ไม่บังคับ)
 
@@ -112,6 +152,19 @@ Base URL คือ `http://localhost:8080` และ endpoint ทั้งหม
 
 **ความคืบหน้า** คือ `งานที่เสร็จ / งานทั้งหมด × 100` ยึดแผนกของโครงการ และไม่นับโครงการที่ยกเลิก
 
+### ฟิลด์ของ Request
+
+| Endpoint | ฟิลด์บังคับ | ฟิลด์เสริม |
+|---|---|---|
+| `POST /auth/login` | `email`, `password` | ไม่มี |
+| `/departments` | `code` (ไม่เกิน 20 ตัวอักษร), `name` (ไม่เกิน 150) | ไม่มี |
+| `/users` | `departmentId`, `fullName`, `email` | `password` (อย่างน้อย 8 ตัวอักษร ไม่เกิน 72 ไบต์), `role` (`admin`, `manager`, `member`), `isActive` |
+| `/projects` | `departmentId`, `code`, `name` | `ownerUserId`, `description`, `status` (`planned`, `active`, `on_hold`, `completed`, `cancelled`), `startDate`, `endDate`, `budget` |
+| `/tasks` | `projectId`, `title` | `assigneeUserId`, `description`, `status` (`todo`, `in_progress`, `done`), `priority` (`low`, `medium`, `high`), `dueDate` |
+| `PATCH /tasks/{id}/status` | `status` | ไม่มี |
+
+วันที่ใช้รูปแบบ `YYYY-MM-DD` และ response มี `id`, `createdAt`, `updatedAt` เพิ่มเติม รวมถึง `completedAt` สำหรับงาน โดยไม่ส่งรหัสผ่านหรือ hash กลับ
+
 ### ตัวอย่าง Request
 
 ```bash
@@ -153,6 +206,17 @@ Error ทุกกรณีเป็น `application/problem+json` ตาม RFC
 ### Postman
 
 Import ไฟล์ทั้งสองในโฟลเดอร์ `postman/` ใส่ `adminPassword` ที่ได้จากคำสั่งในหัวข้อการติดตั้งลงใน environment แล้วรันทั้ง collection ตามลำดับ collection นี้ลบข้อมูลที่สร้างเองหลังรันเสร็จ ส่วนการตรวจค่ารายงานคาดว่าข้อมูลตัวอย่างยังไม่ถูกแก้ไข
+
+หรือรันผ่าน Newman โดยไม่ต้องติดตั้งเพิ่ม:
+
+```bash
+ADMIN_PASSWORD=$(docker compose exec -T api cat /run/app-secrets/Admin__Password)
+docker run --rm --network analytics_frontend -v "$PWD/postman:/etc/newman:ro" postman/newman:alpine \
+  run ProjectMonitoring.postman_collection.json -e ProjectMonitoring.postman_environment.json \
+  --env-var baseUrl=http://api:8080 --env-var "adminPassword=$ADMIN_PASSWORD"
+```
+
+แต่ละรอบเรียก login 5 ครั้ง ถ้ารันถี่จนเกิน 10 ครั้งต่อนาทีจะได้ `429` ให้รอ 1 นาทีแล้วรันใหม่
 
 ## สคริปต์ดูแลระบบ
 

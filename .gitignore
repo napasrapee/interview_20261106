@@ -2,6 +2,10 @@
 *.md
 !README.md
 
+# Builds the .docx files from the local Markdown, so it cannot run from a clone
+/docs/build-docs.sh
+/docs/tools/
+
 # Secrets
 .env
 .env.*
