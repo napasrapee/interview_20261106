@@ -10,7 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiSecurity(builder.Configuration);
-builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new NullCharacterRejectingConverter()))
+    .ConfigureApiBehaviorOptions(options =>
 {
     // Status-only results go through UseStatusCodePages, so all errors share one format.
     options.SuppressMapClientErrors = true;

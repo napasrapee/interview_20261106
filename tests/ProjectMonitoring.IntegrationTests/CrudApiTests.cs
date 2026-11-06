@@ -363,6 +363,24 @@ public class CrudApiTests(ApiFixture api) : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Null_characters_are_rejected_instead_of_failing_in_the_database()
+    {
+        await AssertProblemAsync(
+            await api.Admin.PostAsync(
+                "/api/v1/departments",
+                new StringContent("""{"code":"NUL","name":"a\u0000b"}""", Encoding.UTF8, "application/json")),
+            HttpStatusCode.BadRequest, "malformed_request");
+        await AssertProblemAsync(
+            await api.Anonymous.PostAsync(
+                "/api/v1/auth/login",
+                new StringContent("""{"email":"a\u0000@example.com","password":"x"}""", Encoding.UTF8, "application/json")),
+            HttpStatusCode.BadRequest, "malformed_request");
+        await AssertProblemAsync(
+            await api.Admin.GetAsync("/api/v1/logs?eventType=a%00b"),
+            HttpStatusCode.BadRequest, "validation_error");
+    }
+
+    [Fact]
     public async Task Database_conflicts_are_409()
     {
         await AssertProblemAsync(
