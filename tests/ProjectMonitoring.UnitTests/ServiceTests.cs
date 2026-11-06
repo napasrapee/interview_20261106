@@ -148,6 +148,14 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task Cannot_change_own_role()
+    {
+        var service = NewUserService(new FakeUsers(ExistingUser()), new FakeUnitOfWork(), currentUserId: 5);
+        var request = new UserRequest(1, "A", "a@example.com", Role: "admin");
+        await Assert.ThrowsAsync<ConflictException>(() => service.UpdateAsync(5, request, None));
+    }
+
+    [Fact]
     public async Task Can_delete_other_account()
     {
         var users = new FakeUsers(ExistingUser());

@@ -98,14 +98,20 @@ public sealed class UserService(
         await validator.EnsureValidAsync(request, cancellationToken);
         var user = await RequireAsync(id, cancellationToken);
         var isActive = request.IsActive ?? true;
+        var role = ParseRole(request.Role);
 
-        // RULE-08
-        if (!isActive && id == currentUser.UserId)
+        // RULE-08: stops the only admin from locking everyone out.
+        if (id == currentUser.UserId && !isActive)
         {
             throw new ConflictException("You cannot deactivate your own account.");
         }
 
-        user.Update(request.DepartmentId, request.FullName, request.Email, ParseRole(request.Role), isActive);
+        if (id == currentUser.UserId && role != user.Role)
+        {
+            throw new ConflictException("You cannot change your own role.");
+        }
+
+        user.Update(request.DepartmentId, request.FullName, request.Email, role, isActive);
         ApplyPassword(user, request.Password);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return ToDto(user);

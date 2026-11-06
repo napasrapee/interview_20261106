@@ -12,6 +12,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiSecurity(builder.Configuration);
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
+    // Status-only results go through UseStatusCodePages, so all errors share one format.
+    options.SuppressMapClientErrors = true;
     options.InvalidModelStateResponseFactory = context =>
     {
         var errors = context.ModelState
@@ -40,6 +42,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 var app = builder.Build();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseStatusCodePages(context => Problems.WriteEmptyStatusAsync(context.HttpContext));
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();

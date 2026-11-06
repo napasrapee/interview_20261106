@@ -15,6 +15,8 @@ public static class ErrorCodes
     public const string Forbidden = "forbidden";
     public const string NotFound = "not_found";
     public const string Conflict = "conflict";
+    public const string MethodNotAllowed = "method_not_allowed";
+    public const string UnsupportedMediaType = "unsupported_media_type";
     public const string RateLimited = "rate_limited";
     public const string InternalError = "internal_error";
 }
@@ -42,6 +44,18 @@ public static class Problems
 
         return problem;
     }
+
+    /// <summary>Gives framework responses with an empty body the same format as other errors.</summary>
+    public static Task WriteEmptyStatusAsync(HttpContext context) => context.Response.StatusCode switch
+    {
+        StatusCodes.Status404NotFound => WriteAsync(context, Create(
+            context, 404, ErrorCodes.NotFound, "Not found", "The requested resource was not found.")),
+        StatusCodes.Status405MethodNotAllowed => WriteAsync(context, Create(
+            context, 405, ErrorCodes.MethodNotAllowed, "Method not allowed", "This method is not supported here.")),
+        StatusCodes.Status415UnsupportedMediaType => WriteAsync(context, Create(
+            context, 415, ErrorCodes.UnsupportedMediaType, "Unsupported media type", "Send the request body as JSON.")),
+        _ => Task.CompletedTask,
+    };
 
     public static Task WriteAsync(HttpContext context, ProblemDetails problem)
     {

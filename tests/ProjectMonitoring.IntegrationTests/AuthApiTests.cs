@@ -35,25 +35,13 @@ public sealed class PolicyProbeController : ControllerBase
 
 public class AuthApiTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixture>
 {
-    private const string AdminEmail = "admin@example.com";
-    private const string AdminPassword = "admin-password-1";
-    private const string Secret = "integration-test-secret-integration-test-secret";
+    private const string AdminEmail = ApiFactory.AdminEmail;
+    private const string AdminPassword = ApiFactory.AdminPassword;
+    private const string Secret = ApiFactory.Secret;
     private const string UserPassword = "user-password-1";
 
     private WebApplicationFactory<Program> Factory(int loginLimit = 100_000) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("ConnectionStrings:Default", fixture.ConnectionString);
-            builder.UseSetting("Jwt:Secret", Secret);
-            builder.UseSetting("Jwt:Issuer", "test-issuer");
-            builder.UseSetting("Jwt:Audience", "test-audience");
-            builder.UseSetting("Jwt:ExpiresMinutes", "60");
-            builder.UseSetting("Admin:Email", AdminEmail);
-            builder.UseSetting("Admin:Password", AdminPassword);
-            builder.UseSetting("RateLimit:LoginPermitLimit", loginLimit.ToString());
-            builder.ConfigureServices(services =>
-                services.AddControllers().AddApplicationPart(typeof(PolicyProbeController).Assembly));
-        });
+        ApiFactory.Create(fixture.ConnectionString, loginLimit, typeof(PolicyProbeController).Assembly);
 
     private static async Task<string> LoginAsync(HttpClient client, string email, string password)
     {
@@ -217,7 +205,7 @@ public class AuthApiTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixtu
         var response = await client.GetAsync("/test/boom");
 
         var body = await AssertProblemAsync(response, HttpStatusCode.InternalServerError, "internal_error");
-        Assert.DoesNotContain("secret internal detail", body.GetRawText());
+        Assert.DoesNotContain("secret internal detail", body.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
