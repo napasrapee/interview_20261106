@@ -65,7 +65,13 @@ rotate_real_logs() {
   require_docker
 
   mkdir -p logs
-  "$logrotate" --state logs/.logrotate.state config/logrotate.conf ||
+  # logrotate run as root ignores a config that others can write, which is the case on /mnt
+  # drives in WSL. A private copy with mode 644 works for every user.
+  config_copy="$(mktemp)"
+  trap 'rm -f "$config_copy"' EXIT
+  cp config/logrotate.conf "$config_copy"
+  chmod 644 "$config_copy"
+  "$logrotate" --state logs/.logrotate.state "$config_copy" ||
     fail 1 "logrotate failed."
   log "Rotated logs/*.log"
 

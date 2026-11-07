@@ -21,10 +21,20 @@ random_hex() {
   tr -dc 'a-f0-9' </dev/urandom | head -c "$1"
 }
 
+# Writes through a temporary file and renames it. A file left by an interrupted run is read-only,
+# and this container has no capability to override that, but replacing it by rename still works.
 write_secret() {
-  printf '%s' "$2" >"$secrets_dir/$1"
-  chown "root:$api_group" "$secrets_dir/$1"
-  chmod 440 "$secrets_dir/$1"
+  tmp="$secrets_dir/.$1.tmp"
+  rm -f "$tmp"
+  printf '%s' "$2" >"$tmp"
+  chown "root:$api_group" "$tmp"
+  chmod 440 "$tmp"
+  mv -f "$tmp" "$secrets_dir/$1"
+}
+
+# Quotes a connection string value, so characters such as ; in a password from .env stay part of it.
+quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/"/""/g')"
 }
 
 db_password="${POSTGRES_PASSWORD:-$(random_hex 48)}"
@@ -34,7 +44,7 @@ chmod 750 "$secrets_dir"
 
 write_secret postgres_password "$db_password"
 write_secret ConnectionStrings__Default \
-  "Host=db;Port=5432;Database=$POSTGRES_DB;Username=$POSTGRES_USER;Password=$db_password"
+  "Host=db;Port=5432;Database=$(quote "$POSTGRES_DB");Username=$(quote "$POSTGRES_USER");Password=$(quote "$db_password")"
 write_secret Jwt__Secret "${JWT_SECRET:-$(random_hex 96)}"
 write_secret Admin__Password "${ADMIN_PASSWORD:-$(random_hex 32)}"
 
