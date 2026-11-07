@@ -61,7 +61,7 @@ docker compose down -v   # ลบข้อมูลทั้งหมด รว�
 | `scripts/` | `backup.sh`, `healthcheck.sh`, `resource_usage.sh`, `rotate_logs.sh` และ `init-secrets.sh` ซึ่ง Compose เรียกใช้เอง |
 | `config/` | `logrotate.conf` |
 | `postman/` | Postman collection และ environment |
-| `docs/` | เอกสาร BA และ SA รูปแบบ `.docx` พร้อม ER diagram และ data dictionary |
+| `docs/` | เอกสาร BA, SA และ TEST รูปแบบ `.docx` พร้อม ER diagram, data dictionary และ UAT |
 
 ## สถาปัตยกรรม
 
@@ -90,7 +90,7 @@ Dependency ชี้เข้าหา Domain เสมอ: Api และ Infras
 
 ### Container
 
-![Deployment Diagram](docs/images/SA-08.png)
+![Deployment Diagram](docs/images/SA-11.png)
 
 - **Image:** multi-stage build และรันด้วยผู้ใช้ non-root
 - **ลำดับการเริ่ม:** `secrets-init` จบก่อน `db` ต้อง healthy แล้ว `api` จึงเริ่ม
@@ -272,3 +272,6 @@ dotnet test
 
 - `docs/BA.docx`: ขอบเขต, requirements, user stories, use cases และเกณฑ์ตรวจรับ
 - `docs/SA.docx`: สถาปัตยกรรม, ER diagram, data dictionary, API specification, diagram การทำงาน, deployment และแผนทดสอบ
+- `docs/TEST.docx`: Test case พร้อมขั้นตอน ข้อมูลทดสอบ ผลจริง และแบบฟอร์ม UAT สำหรับผู้ตรวจรับ
+
+ระบบเป็น Backend API ไม่มีหน้าจอ จึงไม่มี Wireframe
