@@ -51,6 +51,7 @@ public class ServiceTests
         public bool Removed { get; private set; }
         public Task<User?> FindAsync(long id, CancellationToken cancellationToken) => Task.FromResult(user);
         public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken) => Task.FromResult(user);
+        public Task<bool> HasUsableAdminAsync(CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<PagedResult<User>> ListAsync(UserListQuery query, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public void Add(User newUser) => Added = newUser;

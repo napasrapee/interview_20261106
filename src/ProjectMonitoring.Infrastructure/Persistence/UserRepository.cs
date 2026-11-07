@@ -32,6 +32,10 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
         return users.OrderBy(user => user.Id).ToPagedResultAsync(query, cancellationToken);
     }
 
+    public Task<bool> HasUsableAdminAsync(CancellationToken cancellationToken) =>
+        db.Users.AnyAsync(
+            user => user.Role == UserRole.Admin && user.IsActive && user.PasswordHash != null, cancellationToken);
+
     public void Add(User user) => db.Users.Add(user);
 
     public void Remove(User user) => db.Users.Remove(user);

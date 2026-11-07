@@ -34,6 +34,7 @@ public static class SecurityExtensions
             };
             options.Events = new JwtBearerEvents
             {
+                OnTokenValidated = CurrentAccountValidation.ApplyAsync,
                 OnChallenge = context =>
                 {
                     context.HandleResponse();

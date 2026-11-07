@@ -18,11 +18,23 @@ public sealed class AdminBootstrapper(
 
     public async Task EnsureAdminExistsAsync(AdminAccountOptions options, CancellationToken cancellationToken)
     {
-        if (await users.FindByEmailAsync(options.Email, cancellationToken) is not null)
+        if (await users.FindByEmailAsync(options.Email, cancellationToken) is null)
         {
-            return;
+            await CreateAdminAsync(options, cancellationToken);
         }
 
+        // An existing account is left as it is. Without any admin who can log in, nobody could manage
+        // the system, so refusing to start is safer than running.
+        if (!await users.HasUsableAdminAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"No active admin with a password exists. ADMIN_EMAIL {options.Email} belongs to an existing " +
+                "account that cannot log in as admin. Set ADMIN_EMAIL to an unused email.");
+        }
+    }
+
+    private async Task CreateAdminAsync(AdminAccountOptions options, CancellationToken cancellationToken)
+    {
         if (options.Password == UnsetValue)
         {
             throw new InvalidOperationException("Set ADMIN_PASSWORD in .env before starting the API.");

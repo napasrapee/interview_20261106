@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using ProjectMonitoring.Application.Abstractions;
 using ProjectMonitoring.Application.Common;
+using ProjectMonitoring.Application.Features.Auth;
+using ProjectMonitoring.Application.Features.Logs;
 using ProjectMonitoring.Application.Features.Projects;
 using ProjectMonitoring.Application.Features.Tasks;
 using ProjectMonitoring.Application.Features.Users;
@@ -21,6 +23,74 @@ public class PersistenceTests(DatabaseFixture fixture) : IClassFixture<DatabaseF
         scope.ServiceProvider.GetRequiredService<IDepartmentRepository>().Add(department);
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(None);
         return department;
+    }
+
+    [Fact]
+    public async Task Log_of_a_deleted_user_is_kept_without_the_link()
+    {
+        await fixture.Services.GetRequiredService<ISystemLogWriter>().WriteAsync(
+            new SystemLog(SystemLogLevel.Info, "deleted_user_test", "message") { UserId = 999999 });
+
+        using var scope = Scope();
+        var logs = await scope.ServiceProvider.GetRequiredService<ISystemLogRepository>()
+            .ListAsync(new LogListQuery(EventType: "deleted_user_test"), None);
+
+        var log = Assert.Single(logs.Items);
+        Assert.Null(log.UserId);
+        Assert.Equal(999999, System.Text.Json.JsonDocument.Parse(log.Details!).RootElement.GetProperty("deletedUserId").GetInt64());
+    }
+
+    [Fact]
+    public async Task Deleting_a_row_that_another_request_deleted_is_conflict()
+    {
+        long taskId;
+        using (var setup = Scope())
+        {
+            var task = new WorkTask(1, null, "Race", null, WorkTaskStatus.Todo, TaskPriority.Low, null, DateTimeOffset.UtcNow);
+            setup.ServiceProvider.GetRequiredService<IWorkTaskRepository>().Add(task);
+            await setup.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(None);
+            taskId = task.Id;
+        }
+
+        using var first = Scope();
+        using var second = Scope();
+        var firstTasks = first.ServiceProvider.GetRequiredService<IWorkTaskRepository>();
+        var secondTasks = second.ServiceProvider.GetRequiredService<IWorkTaskRepository>();
+        var firstCopy = (await firstTasks.FindAsync(taskId, None))!;
+        var secondCopy = (await secondTasks.FindAsync(taskId, None))!;
+
+        secondTasks.Remove(secondCopy);
+        await second.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(None);
+
+        firstTasks.Remove(firstCopy);
+        await Assert.ThrowsAsync<ConflictException>(
+            () => first.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(None));
+    }
+
+    [Fact]
+    public async Task Admin_bootstrap_refuses_to_leave_the_system_without_an_admin()
+    {
+        using (var scope = Scope())
+        {
+            var bootstrapper = scope.ServiceProvider.GetRequiredService<AdminBootstrapper>();
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => bootstrapper.EnsureAdminExistsAsync(
+                new AdminAccountOptions("somchai@example.com", "bootstrap-password-1"), None));
+            Assert.Contains("ADMIN_EMAIL", error.Message, StringComparison.Ordinal);
+        }
+
+        using (var scope = Scope())
+        {
+            await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().EnsureAdminExistsAsync(
+                new AdminAccountOptions("bootstrap@example.com", "bootstrap-password-1"), None);
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IUserRepository>().HasUsableAdminAsync(None));
+        }
+
+        // Once a usable admin exists, an existing non-admin email no longer blocks startup.
+        using (var scope = Scope())
+        {
+            await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().EnsureAdminExistsAsync(
+                new AdminAccountOptions("somchai@example.com", "bootstrap-password-1"), None);
+        }
     }
 
     [Fact]

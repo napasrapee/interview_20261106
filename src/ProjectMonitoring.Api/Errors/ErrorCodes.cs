@@ -10,6 +10,7 @@ public static class ErrorCodes
     public const string NotFound = "not_found";
     public const string Conflict = "conflict";
     public const string MethodNotAllowed = "method_not_allowed";
+    public const string PayloadTooLarge = "payload_too_large";
     public const string UnsupportedMediaType = "unsupported_media_type";
     public const string RateLimited = "rate_limited";
     public const string InternalError = "internal_error";

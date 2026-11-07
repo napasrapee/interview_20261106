@@ -13,6 +13,12 @@ internal sealed class UnitOfWork(AppDbContext db) : IUnitOfWork
         {
             await db.SaveChangesAsync(cancellationToken);
         }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            // Another request deleted the row between reading and saving it.
+            throw new ConflictException(
+                "The record was changed or deleted by another request. Reload it and try again.", exception);
+        }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
         {
             SqlState: PostgresErrorCodes.UniqueViolation

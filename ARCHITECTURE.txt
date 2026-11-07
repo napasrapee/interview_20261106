@@ -170,12 +170,14 @@ Api อ้าง Infrastructure เฉพาะการลงทะเบีย
 
   Exception                                        ผลลัพธ์
   -----------------------------------------------  ---------------------------
+  BadHttpRequestException จาก Kestrel              413 payload_too_large หรือ
+                                                   400 malformed_request
   RequestValidationException, DomainRuleException  400 validation_error
   InvalidCredentialsException                      401 invalid_credentials
   UnauthorizedException                            401 unauthorized
   ForbiddenException                               403 forbidden
   NotFoundException                                404 not_found
-  ConflictException                                409 conflict
+  ConflictException รวมการแก้ข้อมูลชนกัน             409 conflict
   DbException ชั่วคราว                                503 database_unavailable
   อื่น ๆ                                              500 internal_error
 
@@ -201,6 +203,8 @@ error ทุกกรณีมี traceId ซึ่งตรงกับ system_
   - ความลับสุ่มตอนเริ่มครั้งแรก เก็บเป็นไฟล์ใน volume ไม่อยู่ใน repository
     และไม่โผล่ใน docker inspect
   - รหัสผ่านเก็บเป็น BCrypt และ JWT ลงนามด้วย HS256 อายุ 60 นาที
+  - ตรวจบัญชีจากฐานข้อมูลทุก request (CurrentAccountValidation) การปิด ลบ หรือเปลี่ยน
+    role จึงมีผลทันที และสิทธิ์ใช้ role ปัจจุบันแทน role ใน token
   - สิทธิ์ 3 ระดับ: admin, manager, member และ login จำกัด 10 ครั้งต่อนาทีต่อ IP
   - system_logs ไม่เก็บ request body, query string, รหัสผ่าน หรือ token
   - CSV ป้องกัน formula injection และ SQL ใช้พารามิเตอร์

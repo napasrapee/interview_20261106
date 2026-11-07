@@ -225,6 +225,8 @@ public class CrudApiTests(ApiFixture api) : IClassFixture<ApiFixture>
         { "/api/v1/projects?status=closed", "status" },
         { "/api/v1/tasks?status=closed", "status" },
         { "/api/v1/tasks?page=abc", "page" },
+        { "/api/v1/departments?page=1000001", "page" },
+        { "/api/v1/departments?page=2147483647&pageSize=100", "page" },
     };
 
     [Theory]
@@ -335,6 +337,40 @@ public class CrudApiTests(ApiFixture api) : IClassFixture<ApiFixture>
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("admin", (await BodyAsync(response)).GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public async Task Account_changes_apply_to_tokens_already_issued()
+    {
+        const string email = "token-check@example.com";
+        var id = await CreateAsync(api.Admin, "/api/v1/users", new
+        {
+            departmentId = 1, fullName = "Token Check", email, password = "token-check-1", role = "admin",
+        });
+        var user = await api.LogInAsync(email, "token-check-1");
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/v1/logs")).StatusCode);
+
+        await api.Admin.PutAsJsonAsync($"/api/v1/users/{id}", new { departmentId = 1, fullName = "Token Check", email, role = "member" });
+        await AssertProblemAsync(await user.GetAsync("/api/v1/logs"), HttpStatusCode.Forbidden, "forbidden");
+        Assert.Equal("member", (await BodyAsync(await user.GetAsync("/api/v1/auth/me"))).GetProperty("role").GetString());
+
+        await api.Admin.PutAsJsonAsync($"/api/v1/users/{id}", new { departmentId = 1, fullName = "Token Check", email, isActive = false });
+        await AssertProblemAsync(await user.GetAsync("/api/v1/departments"), HttpStatusCode.Unauthorized, "unauthorized");
+
+        await api.Admin.PutAsJsonAsync($"/api/v1/users/{id}", new { departmentId = 1, fullName = "Token Check", email, isActive = true });
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/v1/departments")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await api.Admin.DeleteAsync($"/api/v1/users/{id}")).StatusCode);
+        await AssertProblemAsync(await user.GetAsync("/api/v1/departments"), HttpStatusCode.Unauthorized, "unauthorized");
+    }
+
+    [Fact]
+    public async Task Unreadable_bodies_are_rejected_instead_of_failing()
+    {
+        var tooLarge = await AssertProblemAsync(
+            await api.Admin.GetAsync("/test/payload-too-large"), HttpStatusCode.RequestEntityTooLarge, "payload_too_large");
+        Assert.Equal(413, tooLarge.GetProperty("status").GetInt32());
+        await AssertProblemAsync(await api.Admin.GetAsync("/test/bad-request"), HttpStatusCode.BadRequest, "malformed_request");
     }
 
     [Fact]

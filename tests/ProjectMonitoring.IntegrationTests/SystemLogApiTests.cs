@@ -29,6 +29,34 @@ public class SystemLogApiTests(ApiFixture api) : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Long_custom_methods_are_still_logged()
+    {
+        using var request = new HttpRequestMessage(new HttpMethod("VERSION-CONTROL"), "/api/v1/departments/424242");
+        await api.Anonymous.SendAsync(request);
+
+        var log = await WaitForLogAsync(
+            "eventType=http_request", item => item.GetProperty("path").GetString() == "/api/v1/departments/424242");
+        Assert.Equal("VERSION-CO", log.GetProperty("httpMethod").GetString());
+    }
+
+    [Fact]
+    public async Task Requests_with_a_deleted_account_token_are_rejected_and_logged()
+    {
+        var created = await api.Admin.PostAsJsonAsync("/api/v1/users", new
+        {
+            departmentId = 1, fullName = "Deleted", email = "deleted-log@example.com", password = "deleted-log-1",
+        });
+        var id = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetInt64();
+        var user = await api.LogInAsync("deleted-log@example.com", "deleted-log-1");
+        await api.Admin.DeleteAsync($"/api/v1/users/{id}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/v1/departments/434343")).StatusCode);
+        var log = await WaitForLogAsync(
+            "eventType=http_request", item => item.GetProperty("path").GetString() == "/api/v1/departments/434343");
+        Assert.Equal(401, log.GetProperty("statusCode").GetInt32());
+    }
+
+    [Fact]
     public async Task Requests_are_logged_with_user_and_status_but_no_query_string()
     {
         var response = await api.Manager.GetAsync("/api/v1/projects/1?marker=query-secret");

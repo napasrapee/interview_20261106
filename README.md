@@ -111,7 +111,7 @@ Dependency ชี้เข้าหา Domain เสมอ: Api และ Infras
 | `JWT_SECRET` | สุ่มอัตโนมัติ | ต้องยาวอย่างน้อย 32 ไบต์ |
 | `JWT_ISSUER`, `JWT_AUDIENCE` | `project-monitoring`, `project-monitoring-clients` | ค่าของ JWT |
 | `JWT_EXPIRES_MINUTES` | `60` | อายุของ token |
-| `ADMIN_EMAIL` | `admin@example.com` | Admin เริ่มต้น ใช้เมื่อยังไม่มีบัญชีนี้ |
+| `ADMIN_EMAIL` | `admin@example.com` | Admin เริ่มต้น สร้างเมื่อยังไม่มีบัญชีนี้ ถ้าเป็นอีเมลของบัญชีเดิมที่ไม่ใช่ Admin และระบบไม่มี Admin อื่นที่ login ได้ API จะไม่เริ่มทำงาน |
 | `ADMIN_PASSWORD` | สุ่มอัตโนมัติ | รหัสผ่าน Admin ห้ามใช้ `change-me` |
 | `BACKUP_RETENTION_DAYS` | `7` | จำนวนวันที่เก็บ backup |
 | `LOG_RETENTION_DAYS` | `30` | จำนวนวันที่เก็บแถวใน `system_logs` |
@@ -126,7 +126,7 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
 ## API
 
-Base URL คือ `http://localhost:8080` และ endpoint ทั้งหมดขึ้นต้นด้วย `/api/v1` ยกเว้น `/health` ส่ง token ด้วย header `Authorization: Bearer <token>` ซึ่งมีอายุ 60 นาที
+Base URL คือ `http://localhost:8080` และ endpoint ทั้งหมดขึ้นต้นด้วย `/api/v1` ยกเว้น `/health` ส่ง token ด้วย header `Authorization: Bearer <token>` ซึ่งมีอายุ 60 นาที ระบบตรวจบัญชีทุก request ถ้าบัญชีถูกปิด ถูกลบ หรือเปลี่ยน role จะมีผลทันทีโดยไม่ต้องรอ token หมดอายุ
 
 | Endpoint | สิทธิ์ขั้นต่ำ | คำอธิบาย |
 |---|---|---|
@@ -148,7 +148,7 @@ Base URL คือ `http://localhost:8080` และ endpoint ทั้งหม
 | `GET /reports/{report}/export?format=json\|csv` | manager | ส่งออกรายงาน |
 | `GET /logs` | admin | System logs กรองด้วย `level`, `eventType`, `from`, `to` |
 
-รายการแบบแบ่งหน้ารับ `page` และ `pageSize` (สูงสุด 100) และตอบ `items`, `page`, `pageSize`, `totalItems`, `totalPages`
+รายการแบบแบ่งหน้ารับ `page` (สูงสุด 1,000,000) และ `pageSize` (สูงสุด 100) และตอบ `items`, `page`, `pageSize`, `totalItems`, `totalPages`
 
 ใน `PUT` ถ้าไม่ส่ง `role`, `isActive`, `status`, `priority` หรือ `password` ระบบจะคงค่าเดิม
 
@@ -199,7 +199,8 @@ Error ทุกกรณีเป็น `application/problem+json` ตาม RFC
 | 403 | `forbidden` | สิทธิ์ไม่พอ |
 | 404 | `not_found` | ไม่พบข้อมูล |
 | 405 | `method_not_allowed` | HTTP method ไม่รองรับ |
-| 409 | `conflict` | ค่าซ้ำ หรือข้อมูลยังถูกอ้างอิงอยู่ |
+| 409 | `conflict` | ค่าซ้ำ, ข้อมูลยังถูกอ้างอิงอยู่ หรือถูกแก้หรือลบโดย request อื่นพร้อมกัน |
+| 413 | `payload_too_large` | Body ใหญ่เกินกำหนด |
 | 415 | `unsupported_media_type` | Body ไม่ใช่ JSON |
 | 429 | `rate_limited` | Login ถี่เกินกำหนด |
 | 500 | `internal_error` | ข้อผิดพลาดที่ไม่ได้คาดไว้ |

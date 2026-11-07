@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ProjectMonitoring.Application;
 using ProjectMonitoring.Infrastructure;
 using Testcontainers.PostgreSql;
 
@@ -28,7 +29,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 ["Jwt:Audience"] = "test",
             })
             .Build();
-        Services = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
+        Services = new ServiceCollection()
+            .AddLogging()
+            .AddApplication()
+            .AddInfrastructure(configuration)
+            .BuildServiceProvider();
     }
 
     public async Task DisposeAsync()

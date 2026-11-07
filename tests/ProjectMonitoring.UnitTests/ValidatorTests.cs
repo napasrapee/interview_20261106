@@ -65,6 +65,8 @@ public class ValidatorTests
     [InlineData(0, 20)]
     [InlineData(1, 0)]
     [InlineData(1, 101)]
+    [InlineData(1_000_001, 20)]
+    [InlineData(int.MaxValue, 100)]
     public void Invalid_paging_fails(int page, int pageSize) =>
         Assert.False(new TaskListQueryValidator().Validate(new TaskListQuery(Page: page, PageSize: pageSize)).IsValid);
 

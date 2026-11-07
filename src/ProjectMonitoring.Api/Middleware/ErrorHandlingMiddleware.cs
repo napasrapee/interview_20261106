@@ -66,8 +66,8 @@ public sealed class ErrorHandlingMiddleware(
             eventType,
             (string)problem.Extensions["code"]!)
         {
-            HttpMethod = context.Request.Method,
-            Path = RequestLoggingMiddleware.Truncate(context.Request.Path.Value, 500),
+            HttpMethod = RequestLogContext.Method(context),
+            Path = RequestLogContext.Path(context),
             StatusCode = problem.Status,
             TraceId = RequestLogContext.TraceId(context),
             UserId = RequestLogContext.UserId(context),
@@ -77,6 +77,11 @@ public sealed class ErrorHandlingMiddleware(
 
     private static ProblemDetails Map(HttpContext context, Exception exception) => exception switch
     {
+        // Kestrel raises this while reading a body that is too large or malformed.
+        BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => Problems.Create(
+            context, 413, ErrorCodes.PayloadTooLarge, "Payload too large", "The request body is too large."),
+        BadHttpRequestException => Problems.Create(
+            context, 400, ErrorCodes.MalformedRequest, "Malformed request", "The request could not be read."),
         RequestValidationException validation => Problems.Create(
             context, 400, ErrorCodes.ValidationError, "Validation failed", validation.Message, validation.Errors),
         DomainRuleException => Problems.Create(

@@ -10,8 +10,6 @@ namespace ProjectMonitoring.Api.Middleware;
 /// </summary>
 public sealed class RequestLoggingMiddleware(RequestDelegate next, ISystemLogWriter writer)
 {
-    private const int MaxPathLength = 500;
-
     public async Task InvokeAsync(HttpContext context)
     {
         // Container healthchecks call this every few seconds, which would bury real events.
@@ -29,10 +27,11 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ISystemLogWri
         finally
         {
             var status = context.Response.StatusCode;
-            await writer.WriteAsync(new SystemLog(LevelFor(status), "http_request", $"{context.Request.Method} responded {status}")
+            var method = RequestLogContext.Method(context);
+            await writer.WriteAsync(new SystemLog(LevelFor(status), "http_request", $"{method} responded {status}")
             {
-                HttpMethod = context.Request.Method,
-                Path = Truncate(context.Request.Path.Value, MaxPathLength),
+                HttpMethod = method,
+                Path = RequestLogContext.Path(context),
                 StatusCode = status,
                 DurationMs = (int)Math.Min(stopwatch.ElapsedMilliseconds, int.MaxValue),
                 TraceId = RequestLogContext.TraceId(context),
